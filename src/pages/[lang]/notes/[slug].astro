@@ -1,0 +1,134 @@
+---
+import 'katex/dist/katex.min.css';
+import { render } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { categoryLabel, intlLocale, LANGS, useTranslations, type Lang } from '../../../i18n/ui.ts';
+import { localePath } from '../../../i18n/paths.ts';
+import { getGarden } from '../../../lib/garden.ts';
+import { formatDisplayDate } from '../../../lib/dates.ts';
+import { githubHistoryUrl, githubSourceUrl, newQuestionIssueUrl } from '../../../lib/site.ts';
+
+export async function getStaticPaths() {
+  const { notes } = await getGarden();
+  return LANGS.flatMap((lang) => notes.map((note) => ({ params: { lang, slug: note.id } })));
+}
+
+const lang = Astro.params.lang as Lang;
+const t = useTranslations(lang);
+const locale = intlLocale[lang];
+const { notesById, revisionsByNote, reviewDatesByNote, publicQuestions } = await getGarden();
+const note = notesById.get(Astro.params.slug!)!;
+const { Content } = await render(note);
+
+const filePath = note.filePath ?? `src/content/notes/${note.id}.md`;
+const revisions = [...(revisionsByNote.get(note.id) ?? [])].reverse();
+const reviewDates = reviewDatesByNote.get(note.id) ?? [];
+const questions = publicQuestions.filter((q) => q.data.note === note.id);
+const fmt = (d: string) => formatDisplayDate(d, locale);
+---
+
+<BaseLayout lang={lang} title={note.data.title} description={note.data.description}>
+  <a href={localePath(lang, '/notes/')} class="text-sm text-muted hover:text-accent">{t('note.back')}</a>
+
+  <article class="mt-6">
+    <header class="mb-8">
+      <p class="font-mono text-xs text-accent">
+        <a href={localePath(lang, `/notes/category/${note.data.category}/`)} class="hover:underline">
+          {categoryLabel(note.data.category, lang)}
+        </a>
+      </p>
+      <h1 class="mt-2 text-2xl sm:text-3xl font-semibold leading-tight tracking-tight">{note.data.title}</h1>
+      <p class="mt-3 text-muted">{note.data.description}</p>
+      <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
+        <span>
+          {t('note.published')} <time datetime={note.data.published} class="font-mono">{fmt(note.data.published)}</time>
+        </span>
+        {
+          note.data.tags.length > 0 && (
+            <span class="flex flex-wrap gap-1.5" aria-label={t('note.tags')}>
+              {note.data.tags.map((tag) => (
+                <a class="chip" href={`${localePath(lang, '/notes/')}?tag=${encodeURIComponent(tag)}`}>
+                  #{tag}
+                </a>
+              ))}
+            </span>
+          )
+        }
+      </div>
+    </header>
+
+    <div class="prose">
+      <Content />
+    </div>
+  </article>
+
+  <aside class="mt-12 card p-5" aria-labelledby="timeline-heading">
+    <h2 id="timeline-heading" class="section-title">{t('note.timeline')}</h2>
+    <dl class="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+      <div>
+        <dt class="font-medium">{t('note.revisions')}</dt>
+        <dd class="mt-1 text-muted">
+          {
+            revisions.length ? (
+              <ul class="space-y-1">
+                {revisions.map((r) => (
+                  <li>
+                    <time datetime={r.date} class="font-mono text-xs">
+                      {r.date}
+                    </time>{' '}
+                    {r.summary}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              t('note.noRevisions')
+            )
+          }
+        </dd>
+      </div>
+      <div>
+        <dt class="font-medium">{t('note.reviews')}</dt>
+        <dd class="mt-1 text-muted">
+          {
+            reviewDates.length ? (
+              <>
+                {t('note.reviewCount', { n: reviewDates.length })}
+                <br />
+                {t('note.lastReviewed', { date: fmt(reviewDates.at(-1)!) })}
+              </>
+            ) : (
+              t('note.neverReviewed')
+            )
+          }
+        </dd>
+      </div>
+    </dl>
+    <p class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+      <a class="link" href={githubHistoryUrl(filePath)}>{t('note.history')}</a>
+      <a class="link" href={githubSourceUrl(filePath)}>{t('note.source')}</a>
+    </p>
+  </aside>
+
+  <section class="mt-8" aria-labelledby="questions-heading">
+    <h2 id="questions-heading" class="section-title">{t('note.questions')}</h2>
+    {
+      questions.length ? (
+        <ul class="mt-3 space-y-2 text-sm">
+          {questions.map((q) => (
+            <li class="flex flex-wrap items-baseline gap-2">
+              <span class="chip">{t(q.data.status === 'open' ? 'q.status.open' : 'q.status.resolved')}</span>
+              <a class="link" href={`${localePath(lang, '/questions/')}#q-${q.id}`}>
+                {q.data.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="mt-3 text-sm text-muted">{t('note.noQuestions')}</p>
+      )
+    }
+    <p class="mt-4 text-sm">
+      <a class="link" href={newQuestionIssueUrl(note.id, note.data.title)}>{t('note.ask')}</a>
+    </p>
+  </section>
+</BaseLayout>

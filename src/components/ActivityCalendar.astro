@@ -1,0 +1,343 @@
+---
+import { countEventsByDate, type ActivityEvent } from '../lib/activity.ts';
+import { buildCalendarYear, calendarYears } from '../lib/calendar.ts';
+import { formatDisplayDate, parseCalendarDate } from '../lib/dates.ts';
+import { intlLocale, useTranslations, type Lang } from '../i18n/ui.ts';
+import { localePath } from '../i18n/paths.ts';
+
+interface Props {
+  lang: Lang;
+  events: ActivityEvent[];
+  /** Today in the calendar timezone (build time). */
+  today: string;
+}
+
+const { lang, events, today } = Astro.props;
+const t = useTranslations(lang);
+const locale = intlLocale[lang];
+
+const counts = countEventsByDate(events);
+const years = calendarYears(counts.keys(), today);
+const currentYear = parseCalendarDate(today).year;
+const grids = years.map((y) => buildCalendarYear(y, counts, today));
+
+const monthNames = Array.from({ length: 12 }, (_, m) =>
+  new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2000, m, 1))),
+);
+const weekdayNames = Array.from({ length: 7 }, (_, d) =>
+  // 2000-01-02 was a Sunday.
+  new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2000, 0, 2 + d))),
+);
+
+const longDate = (date: string) =>
+  formatDisplayDate(date, locale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+const countText = (n: number) => (n === 0 ? t('cal.noActivity') : t('cal.activities', { n }));
+
+// Client payload: per-date event lists with localised links.
+const byDate: Record<string, { type: string; title: string; href: string; detail?: string }[]> = {};
+for (const e of events) {
+  const href = e.questionId
+    ? `${localePath(lang, '/questions/')}#q-${e.questionId}`
+    : localePath(lang, `/notes/${e.noteId}/`);
+  (byDate[e.date] ??= []).push({ type: e.type, title: e.title, href, detail: e.detail });
+}
+const payload = {
+  events: byDate,
+  labels: {
+    publish: t('cal.type.publish'),
+    revision: t('cal.type.revision'),
+    review: t('cal.type.review'),
+    question: t('cal.type.question'),
+  },
+  empty: t('cal.detailsEmpty'),
+  future: t('cal.future'),
+  today,
+};
+---
+
+<section class="activity-calendar card p-4 sm:p-5" data-calendar>
+  <div class="flex flex-wrap items-center gap-3 mb-3">
+    <h2 class="section-title" id="calendar-heading">{t('home.calendar')}</h2>
+    {
+      years.length > 1 && (
+        <div class="ml-auto flex flex-wrap gap-1" role="group" aria-label={t('cal.year')}>
+          {years.map((y) => (
+            <button type="button" class="chip" data-year-button={y} aria-pressed={y === currentYear ? 'true' : 'false'}>
+              {y}
+            </button>
+          ))}
+        </div>
+      )
+    }
+  </div>
+
+  {
+    grids.map((g) => (
+      <div class="cal-year" data-year={g.year} hidden={g.year !== currentYear}>
+        <p class="mb-3 text-sm text-muted">
+          {t('cal.yearTotal', { year: g.year, n: g.total, days: g.activeDays })}
+        </p>
+        <div class="cal-scroll">
+          <div class="cal" style={`--weeks:${g.weeks.length}`}>
+            <div class="months" aria-hidden="true">
+              {g.monthStarts.map((w, m) => (
+                <span style={`grid-column:${w + 1}`}>{monthNames[m]}</span>
+              ))}
+            </div>
+            <div class="weekdays" aria-hidden="true">
+              {weekdayNames.map((d, i) => (
+                <span>{i % 2 === 1 ? d : ''}</span>
+              ))}
+            </div>
+            <div class="cells" role="group" aria-label={t('cal.gridLabel', { year: g.year })}>
+              {g.weeks.flat().map((c) =>
+                c.inYear ? (
+                  <button
+                    type="button"
+                    class="cell"
+                    data-date={c.date}
+                    data-level={c.level}
+                    data-future={c.isFuture ? '' : undefined}
+                    tabindex={c.date === today || (g.year !== currentYear && c.date.endsWith('-01-01')) ? 0 : -1}
+                    aria-pressed="false"
+                    aria-current={c.date === today ? 'date' : undefined}
+                    aria-label={`${longDate(c.date)}: ${countText(c.count)}`}
+                    title={`${c.date} · ${countText(c.count)}`}
+                  />
+                ) : (
+                  <span class="cell pad" aria-hidden="true" />
+                ),
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    ))
+  }
+
+  <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted">
+    <p class="flex-1 min-w-[16rem]">{t('cal.hint')}</p>
+    <div class="flex items-center gap-1" aria-hidden="true">
+      <span>{t('cal.less')}</span>
+      {[0, 1, 2, 3, 4].map((l) => <span class="cell legend" data-level={l} />)}
+      <span>{t('cal.more')}</span>
+    </div>
+  </div>
+
+  <div class="cal-details mt-4 border-t border-dashed border-line pt-4" aria-live="polite" data-details>
+    <p class="text-sm text-muted">{t('cal.hint')}</p>
+  </div>
+  <p class="mt-3 text-xs text-muted">{t('cal.legend')}</p>
+
+  <script type="application/json" data-calendar-payload set:html={JSON.stringify(payload).replace(/</g, '\\u003c')} />
+</section>
+
+<style>
+  .cal-scroll {
+    position: relative;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .cal {
+    --cell: 13px;
+    --gap: 3px;
+    display: grid;
+    grid-template-columns: auto max-content;
+    grid-template-rows: auto auto;
+    column-gap: 6px;
+    row-gap: 4px;
+    width: max-content;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .months {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: repeat(var(--weeks), var(--cell));
+    column-gap: var(--gap);
+    height: 14px;
+  }
+  .months span {
+    white-space: nowrap;
+    grid-row: 1;
+  }
+  .weekdays {
+    grid-column: 1;
+    grid-row: 2;
+    display: grid;
+    grid-template-rows: repeat(7, var(--cell));
+    row-gap: var(--gap);
+    line-height: var(--cell);
+  }
+  .cells {
+    grid-column: 2;
+    grid-row: 2;
+    display: grid;
+    grid-template-rows: repeat(7, var(--cell));
+    grid-auto-flow: column;
+    grid-auto-columns: var(--cell);
+    gap: var(--gap);
+  }
+  .cell {
+    display: block;
+    width: var(--cell, 11px);
+    height: var(--cell, 11px);
+    border-radius: 2px;
+    background: var(--cal-0);
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+  .cell.pad {
+    background: transparent;
+    cursor: default;
+  }
+  .cell.legend {
+    --cell: 11px;
+    cursor: default;
+  }
+  .cell[data-level='1'] {
+    background: var(--cal-1);
+  }
+  .cell[data-level='2'] {
+    background: var(--cal-2);
+  }
+  .cell[data-level='3'] {
+    background: var(--cal-3);
+  }
+  .cell[data-level='4'] {
+    background: var(--cal-4);
+  }
+  .cell[data-future] {
+    opacity: 0.45;
+  }
+  .cell[aria-current='date'] {
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .cell[aria-pressed='true'] {
+    outline: 2px solid var(--text);
+    outline-offset: 1px;
+  }
+  .cell:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+  @media (max-width: 640px) {
+    .cal {
+      --cell: 11px;
+    }
+  }
+  @media (hover: hover) {
+    button.cell:hover {
+      outline: 1px solid var(--text-muted);
+      outline-offset: 1px;
+    }
+  }
+</style>
+
+<script>
+  interface Payload {
+    events: Record<string, { type: string; title: string; href: string; detail?: string }[]>;
+    labels: Record<string, string>;
+    empty: string;
+    future: string;
+    today: string;
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-calendar]')) {
+    const payload: Payload = JSON.parse(root.querySelector('[data-calendar-payload]')!.textContent!);
+    const details = root.querySelector<HTMLElement>('[data-details]')!;
+    const years = [...root.querySelectorAll<HTMLElement>('.cal-year')];
+    const yearButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-year-button]')];
+    let selected: HTMLButtonElement | null = null;
+
+    const cellsOf = (year: HTMLElement) => [...year.querySelectorAll<HTMLButtonElement>('button.cell')];
+
+    function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text) node.textContent = text;
+      return node;
+    }
+
+    function renderDetails(cell: HTMLButtonElement) {
+      const date = cell.dataset.date!;
+      const list = payload.events[date] ?? [];
+      details.replaceChildren();
+      const heading = el('h3', 'font-mono text-sm font-medium mb-2');
+      heading.textContent = cell.getAttribute('aria-label') ?? date;
+      if (date > payload.today) heading.append(' ', payload.future);
+      details.append(heading);
+      if (!list.length) {
+        details.append(el('p', 'text-sm text-muted', payload.empty));
+        return;
+      }
+      const ul = el('ul', 'space-y-1.5 text-sm');
+      for (const item of list) {
+        const li = el('li', 'flex flex-wrap items-baseline gap-x-2');
+        li.append(el('span', `chip type-${item.type}`, payload.labels[item.type] ?? item.type));
+        const a = el('a', 'link', item.title);
+        a.href = item.href;
+        li.append(a);
+        if (item.detail) li.append(el('span', 'text-muted', `— ${item.detail}`));
+        ul.append(li);
+      }
+      details.append(ul);
+    }
+
+    function select(cell: HTMLButtonElement, focus = false) {
+      const year = cell.closest<HTMLElement>('.cal-year')!;
+      for (const c of cellsOf(year)) c.tabIndex = -1;
+      cell.tabIndex = 0;
+      selected?.setAttribute('aria-pressed', 'false');
+      cell.setAttribute('aria-pressed', 'true');
+      selected = cell;
+      renderDetails(cell);
+      if (focus) cell.focus();
+    }
+
+    function centerInScroller(cell: HTMLElement) {
+      const scroller = cell.closest<HTMLElement>('.cal-scroll');
+      if (scroller) scroller.scrollLeft = cell.offsetLeft - scroller.clientWidth / 2;
+    }
+
+    function showYear(y: string) {
+      for (const year of years) year.hidden = year.dataset.year !== y;
+      for (const b of yearButtons) b.setAttribute('aria-pressed', String(b.dataset.yearButton === y));
+      const year = years.find((el) => el.dataset.year === y)!;
+      const cells = cellsOf(year);
+      const initial = cells.find((c) => c.dataset.date === payload.today) ?? cells.find((c) => c.tabIndex === 0) ?? cells[0];
+      select(initial);
+      centerInScroller(initial);
+    }
+
+    root.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const cell = target.closest<HTMLButtonElement>('button.cell');
+      if (cell) return select(cell);
+      const yb = target.closest<HTMLButtonElement>('[data-year-button]');
+      if (yb) showYear(yb.dataset.yearButton!);
+    });
+
+    root.addEventListener('keydown', (e) => {
+      const cell = (e.target as HTMLElement).closest<HTMLButtonElement>('button.cell');
+      if (!cell) return;
+      const cells = cellsOf(cell.closest<HTMLElement>('.cal-year')!);
+      const i = cells.indexOf(cell);
+      // DOM order is chronological: ±1 = next/previous day, ±7 = next/previous week.
+      const delta: Record<string, number> = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 };
+      let next: number | undefined;
+      if (e.key in delta) next = i + delta[e.key];
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = cells.length - 1;
+      if (next === undefined) return;
+      e.preventDefault();
+      select(cells[Math.max(0, Math.min(cells.length - 1, next))], true);
+    });
+
+    const visible = years.find((y) => !y.hidden);
+    if (visible) showYear(visible.dataset.year!);
+  }
+</script>

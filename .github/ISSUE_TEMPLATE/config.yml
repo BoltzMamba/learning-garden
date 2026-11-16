@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Browse existing questions / 查看已有问答
+    url: https://boltzmamba.github.io/learning-garden/en/questions/
+    about: Your question may already be answered.

@@ -1,0 +1,134 @@
+---
+import { languages, LANGS, useTranslations, type Lang } from '../i18n/ui.ts';
+import { localePath } from '../i18n/paths.ts';
+
+interface Props {
+  lang: Lang;
+  /** Logical path without base/lang, e.g. /notes/foo/ */
+  path: string;
+}
+
+const { lang, path } = Astro.props;
+const t = useTranslations(lang);
+
+// Only sections that exist. Add Projects / About here when those pages ship.
+const nav = [
+  { href: '/', label: t('nav.home'), match: (p: string) => p === '/' },
+  { href: '/notes/', label: t('nav.notes'), match: (p: string) => p.startsWith('/notes/') },
+  { href: '/questions/', label: t('nav.questions'), match: (p: string) => p.startsWith('/questions/') },
+];
+const otherLangs = LANGS.filter((l) => l !== lang);
+---
+
+<header class="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur supports-[backdrop-filter]:bg-bg/70">
+  <div class="mx-auto flex max-w-[1000px] items-center gap-3 px-4 sm:px-6 h-14">
+    <a href={localePath(lang, '/')} class="font-mono text-sm font-medium tracking-tight shrink-0 no-underline">
+      <span class="text-accent" aria-hidden="true">~/</span><span class="hidden sm:inline">learning-</span>garden
+    </a>
+    <nav aria-label={t('nav.main')} class="ml-auto">
+      <ul class="flex items-center gap-1 sm:gap-2 text-sm">
+        {
+          nav.map((item) => (
+            <li>
+              <a
+                href={localePath(lang, item.href)}
+                aria-current={item.match(path) ? 'page' : undefined}
+                class="rounded px-2 py-1 text-muted hover:text-fg aria-[current=page]:text-accent"
+              >
+                {item.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+    <div class="flex items-center gap-1 border-l border-line pl-2 sm:pl-3">
+      {
+        otherLangs.map((l) => (
+          <a
+            href={localePath(l, path)}
+            hreflang={l === 'zh' ? 'zh-CN' : 'en'}
+            lang={l === 'zh' ? 'zh-CN' : 'en'}
+            data-lang-switch={l}
+            aria-label={`${t('lang.switch')}: ${languages[l]}`}
+            class="rounded px-2 py-1 font-mono text-xs text-muted hover:text-fg"
+          >
+            {l === 'zh' ? '中' : 'EN'}
+          </a>
+        ))
+      }
+      <button
+        type="button"
+        id="theme-toggle"
+        class="grid h-8 w-8 place-items-center rounded text-muted hover:text-fg"
+        aria-label={t('theme.toggle')}
+        data-label-dark={t('theme.toDark')}
+        data-label-light={t('theme.toLight')}
+      >
+        <svg class="theme-icon-moon h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <svg class="theme-icon-sun h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<style>
+  :global([data-theme='dark']) .theme-icon-moon,
+  :global([data-theme='light']) .theme-icon-sun {
+    display: none;
+  }
+</style>
+
+<script>
+  const root = document.documentElement;
+  const button = document.getElementById('theme-toggle') as HTMLButtonElement | null;
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+
+  function storedTheme(): string | null {
+    try {
+      return localStorage.getItem('lg-theme');
+    } catch {
+      return null;
+    }
+  }
+
+  function apply(theme: 'light' | 'dark') {
+    root.dataset.theme = theme;
+    if (button) {
+      button.setAttribute('aria-label', theme === 'dark' ? button.dataset.labelLight! : button.dataset.labelDark!);
+    }
+  }
+
+  apply(root.dataset.theme === 'dark' ? 'dark' : 'light');
+
+  button?.addEventListener('click', () => {
+    const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    apply(next);
+    try {
+      localStorage.setItem('lg-theme', next);
+    } catch {
+      /* storage unavailable: theme still applies for this page */
+    }
+  });
+
+  // Follow the system only while the visitor has not chosen explicitly.
+  media.addEventListener('change', (e) => {
+    if (!storedTheme()) apply(e.matches ? 'dark' : 'light');
+  });
+
+  // Remember an explicit language choice for the root redirect.
+  document.querySelectorAll<HTMLAnchorElement>('[data-lang-switch]').forEach((a) =>
+    a.addEventListener('click', () => {
+      try {
+        localStorage.setItem('lg-lang', a.dataset.langSwitch!);
+      } catch {
+        /* ignore */
+      }
+    }),
+  );
+</script>

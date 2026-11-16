@@ -1,0 +1,117 @@
+---
+import 'katex/dist/katex.min.css';
+import { render } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { intlLocale, LANGS, useTranslations, type Lang } from '../../../i18n/ui.ts';
+import { localePath } from '../../../i18n/paths.ts';
+import { getGarden, type Question } from '../../../lib/garden.ts';
+import { formatDisplayDate } from '../../../lib/dates.ts';
+import { newQuestionIssueUrl } from '../../../lib/site.ts';
+
+export function getStaticPaths() {
+  return LANGS.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Lang;
+const t = useTranslations(lang);
+const fmt = (d: string) => formatDisplayDate(d, intlLocale[lang]);
+// Only `public: true` questions are rendered. This is a display filter, not privacy.
+const { publicQuestions, notesById } = await getGarden();
+
+const rendered = await Promise.all(
+  publicQuestions.map(async (q) => ({ q, Content: (await render(q)).Content, hasAnswer: Boolean(q.body?.trim()) })),
+);
+const groups: { key: 'open' | 'resolved'; label: string; items: typeof rendered }[] = [
+  { key: 'open', label: t('q.open'), items: rendered.filter((r) => r.q.data.status === 'open') },
+  { key: 'resolved', label: t('q.resolved'), items: rendered.filter((r) => r.q.data.status === 'resolved') },
+];
+const noteTitle = (q: Question) => (q.data.note ? notesById.get(q.data.note)?.data.title : undefined);
+---
+
+<BaseLayout lang={lang} title={t('q.title')}>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">{t('q.title')}</h1>
+  <p class="mt-2 text-muted">{t('q.intro')}</p>
+
+  <div class="mt-6 card p-4 text-sm">
+    <p class="text-muted">{t('q.contribute')}</p>
+    <a class="mt-3 inline-block link" href={newQuestionIssueUrl()}>{t('q.ask')} ↗</a>
+  </div>
+
+  {
+    publicQuestions.length === 0 && <p class="mt-8 text-muted">{t('q.empty')}</p>
+  }
+
+  {
+    groups.map(
+      (g) =>
+        g.items.length > 0 && (
+          <section class="mt-10" aria-labelledby={`group-${g.key}`}>
+            <h2 id={`group-${g.key}`} class="section-title">
+              {g.label} ({g.items.length})
+            </h2>
+            <ul class="mt-4 space-y-4">
+              {g.items.map(({ q, Content, hasAnswer }) => (
+                <li>
+                  <article id={`q-${q.id}`} class="card p-5 scroll-mt-20 target:border-accent">
+                    <header class="flex flex-wrap items-start gap-2">
+                      <span class="chip">{t(q.data.status === 'open' ? 'q.status.open' : 'q.status.resolved')}</span>
+                      <h3 class="flex-1 min-w-[12rem] font-semibold leading-snug">
+                        <a href={`#q-${q.id}`} class="hover:text-accent">
+                          {q.data.title}
+                        </a>
+                      </h3>
+                    </header>
+                    <p class="mt-3 text-sm">{q.data.description}</p>
+                    <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted font-mono">
+                      <div>
+                        <dt class="inline">{t('q.created')}:</dt> <dd class="inline">{fmt(q.data.created)}</dd>
+                      </div>
+                      {q.data.resolvedOn && (
+                        <div>
+                          <dt class="inline">{t('q.resolvedOn')}:</dt> <dd class="inline">{fmt(q.data.resolvedOn)}</dd>
+                        </div>
+                      )}
+                      {q.data.note && (
+                        <div>
+                          <dt class="inline">{t('q.relatedNote')}:</dt>{' '}
+                          <dd class="inline">
+                            <a class="link" href={localePath(lang, `/notes/${q.data.note}/`)}>
+                              {noteTitle(q)}
+                            </a>
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                    {hasAnswer ? (
+                      <details class="mt-4" open={q.data.status === 'resolved'}>
+                        <summary class="cursor-pointer text-sm font-medium">{t('q.answer')}</summary>
+                        <div class="prose mt-3 text-[0.95rem]">
+                          <Content />
+                        </div>
+                      </details>
+                    ) : (
+                      <p class="mt-4 text-sm text-muted">{t('q.noAnswer')}</p>
+                    )}
+                    {q.data.sources.length > 0 && (
+                      <div class="mt-4 text-sm">
+                        <p class="font-medium">{t('q.sources')}</p>
+                        <ul class="mt-1 list-disc pl-5">
+                          {q.data.sources.map((s) => (
+                            <li>
+                              <a class="link" href={s.url}>
+                                {s.title}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </article>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ),
+    )
+  }
+</BaseLayout>

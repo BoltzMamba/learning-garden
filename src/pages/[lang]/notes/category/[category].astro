@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import NoteList from '../../../../components/NoteList.astro';
+import CategoryNav from '../../../../components/CategoryNav.astro';
+import { categoryLabel, LANGS, useTranslations, type Lang } from '../../../../i18n/ui.ts';
+import { getGarden } from '../../../../lib/garden.ts';
+
+export async function getStaticPaths() {
+  const { notes } = await getGarden();
+  const categories = [...new Set(notes.map((n) => n.data.category))];
+  return LANGS.flatMap((lang) => categories.map((category) => ({ params: { lang, category } })));
+}
+
+const lang = Astro.params.lang as Lang;
+const category = Astro.params.category!;
+const t = useTranslations(lang);
+const { notes } = await getGarden();
+const inCategory = notes.filter((n) => n.data.category === category);
+const label = categoryLabel(category, lang);
+---
+
+<BaseLayout lang={lang} title={`${label} · ${t('notes.title')}`}>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">{t('notes.inCategory', { category: label })}</h1>
+  <p class="mt-2 text-muted">{t('notes.count', { n: inCategory.length })}</p>
+  <div class="mt-6">
+    <CategoryNav lang={lang} notes={notes} current={category} />
+  </div>
+  <div class="mt-6">
+    <NoteList lang={lang} notes={inCategory} />
+  </div>
+</BaseLayout>

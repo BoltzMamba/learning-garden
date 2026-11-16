@@ -1,0 +1,21 @@
+---
+import { useTranslations, type Lang } from '../i18n/ui.ts';
+import { REPO_URL } from '../lib/site.ts';
+import { profile } from '../data/profile.ts';
+
+interface Props {
+  lang: Lang;
+}
+const t = useTranslations(Astro.props.lang);
+---
+
+<footer class="border-t border-line mt-16">
+  <div class="mx-auto flex max-w-[1000px] flex-wrap items-center gap-x-6 gap-y-2 px-4 sm:px-6 py-6 font-mono text-xs text-muted">
+    <span aria-hidden="true" class="text-accent">&gt;&lt;(((º&gt;</span>
+    <span>{t('footer.built')}</span>
+    <span class="flex gap-4 sm:ml-auto">
+      <a class="hover:text-fg" href={`https://github.com/${profile.github}`} rel="me">GitHub</a>
+      <a class="hover:text-fg" href={REPO_URL}>{t('footer.source')}</a>
+    </span>
+  </div>
+</footer>

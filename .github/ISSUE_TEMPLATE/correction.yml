@@ -1,0 +1,24 @@
+name: Report a correction / 勘误
+description: Point out an error in a note. For larger fixes, a Pull Request is welcome.
+title: "[Correction] "
+labels: ["correction"]
+body:
+  - type: input
+    id: note
+    attributes:
+      label: Note / 笔记
+      description: The note slug from the URL
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong? / 哪里有问题？
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix and sources / 建议的修改与依据
+    validations:
+      required: false

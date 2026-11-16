@@ -1,0 +1,84 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import NoteList from '../../../components/NoteList.astro';
+import CategoryNav from '../../../components/CategoryNav.astro';
+import { LANGS, useTranslations, type Lang } from '../../../i18n/ui.ts';
+import { getGarden } from '../../../lib/garden.ts';
+
+export function getStaticPaths() {
+  return LANGS.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Lang;
+const t = useTranslations(lang);
+const { notes } = await getGarden();
+
+const tagCounts = new Map<string, number>();
+for (const n of notes) for (const tag of n.data.tags) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+const tags = [...tagCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+---
+
+<BaseLayout lang={lang} title={t('notes.title')}>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">{t('notes.title')}</h1>
+  <p class="mt-2 text-muted">{t('notes.intro')}</p>
+
+  <div class="mt-6 space-y-3">
+    <CategoryNav lang={lang} notes={notes} />
+    {
+      tags.length > 0 && (
+        <div class="flex flex-wrap items-center gap-2" role="group" aria-label={t('notes.tags')} data-tag-filter>
+          <span class="text-sm text-muted mr-1">{t('notes.tags')}:</span>
+          {tags.map(([tag, n]) => (
+            <button type="button" class="chip" data-tag={tag} aria-pressed="false">
+              #{tag} <span aria-hidden="true">·</span> {n}
+            </button>
+          ))}
+        </div>
+      )
+    }
+  </div>
+
+  <p class="mt-4 text-sm text-muted" data-tag-status hidden>
+    <span data-tag-label></span>
+    <button type="button" class="link ml-2" data-tag-clear>{t('notes.clearTag')}</button>
+  </p>
+
+  <div class="mt-6">
+    {notes.length ? <NoteList lang={lang} notes={notes} filterable /> : <p class="text-muted">{t('notes.empty')}</p>}
+  </div>
+
+  <template data-tag-template>{t('notes.filteredByTag', { tag: '__TAG__' })}</template>
+</BaseLayout>
+
+<script>
+  // Progressive enhancement: without JS every note is listed.
+  const items = [...document.querySelectorAll<HTMLElement>('li[data-tags]')];
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-tag]')];
+  const status = document.querySelector<HTMLElement>('[data-tag-status]');
+  const label = document.querySelector<HTMLElement>('[data-tag-label]');
+  const template = document.querySelector<HTMLTemplateElement>('[data-tag-template]')?.innerHTML ?? '#__TAG__';
+
+  function apply(tag: string | null) {
+    for (const li of items) {
+      const tags: string[] = JSON.parse(li.dataset.tags ?? '[]');
+      li.hidden = tag !== null && !tags.includes(tag);
+    }
+    for (const b of buttons) b.setAttribute('aria-pressed', String(b.dataset.tag === tag));
+    if (status && label) {
+      status.hidden = tag === null;
+      label.textContent = tag ? template.replace('__TAG__', tag) : '';
+    }
+    const url = new URL(location.href);
+    if (tag) url.searchParams.set('tag', tag);
+    else url.searchParams.delete('tag');
+    history.replaceState(null, '', url);
+  }
+
+  for (const b of buttons) {
+    b.addEventListener('click', () => apply(b.getAttribute('aria-pressed') === 'true' ? null : b.dataset.tag!));
+  }
+  document.querySelector('[data-tag-clear]')?.addEventListener('click', () => apply(null));
+
+  const initial = new URL(location.href).searchParams.get('tag');
+  if (initial && buttons.some((b) => b.dataset.tag === initial)) apply(initial);
+</script>

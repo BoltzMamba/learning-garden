@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { localePath } from '../i18n/paths.ts';
+import { useTranslations } from '../i18n/ui.ts';
+
+const zh = useTranslations('zh');
+const en = useTranslations('en');
+---
+
+<BaseLayout lang="en" title="404" standalone>
+  <pre aria-hidden="true" class="font-mono text-accent text-sm">{`   ~~~^~~~~~^~~~
+      ><(((º>   ?
+   \\|/     \\|/`}</pre>
+  <h1 class="mt-6 text-2xl font-semibold">404 · {en('notFound.title')} / {zh('notFound.title')}</h1>
+  <p class="mt-2 text-muted">{en('notFound.body')} <span lang="zh-CN">{zh('notFound.body')}</span></p>
+  <p class="mt-6 flex gap-4">
+    <a class="link" href={localePath('en', '/')}>{en('notFound.home')}</a>
+    <a class="link" lang="zh-CN" href={localePath('zh', '/')}>{zh('notFound.home')}</a>
+  </p>
+</BaseLayout>

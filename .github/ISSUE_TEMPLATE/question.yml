@@ -1,0 +1,35 @@
+name: Ask a question / 提问
+description: Ask about a note or a technical topic. Questions are reviewed before they appear on the site.
+title: "[Question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for asking! The owner reviews every question; accepted ones are added to the site's Questions page.
+        感谢提问！所有问题都会先经过站主审阅，被采纳的问题会整理后出现在网站的问答页面。
+
+        Please do not include private or sensitive information: this repository is public.
+        请不要填写隐私或敏感信息：本仓库是公开的。
+  - type: input
+    id: note
+    attributes:
+      label: Related note / 相关笔记
+      description: The note slug from the URL, e.g. how-this-garden-works (optional)
+      placeholder: how-this-garden-works
+    validations:
+      required: false
+  - type: textarea
+    id: question
+    attributes:
+      label: Question / 问题
+      description: What is unclear, wrong, or worth exploring?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context or sources / 背景与参考资料
+      description: Links, examples, or what you already tried (optional)
+    validations:
+      required: false
