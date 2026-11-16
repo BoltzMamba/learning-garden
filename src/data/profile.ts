@@ -1,16 +1,15 @@
 /**
- * Owner profile shown on the homepage.
- *
- * Anything wrapped in 【…】 / […] is a PLACEHOLDER: replace it with your own
- * words. Do not publish facts you have not written yourself.
+ * Owner profile shown in the homepage hero. Edit freely.
+ * Keep it factual: do not add experience or achievements you have not written yourself.
  */
 export const profile = {
-  /** Display name. Currently the GitHub handle. */
   name: 'BoltzMamba',
   github: 'BoltzMamba',
-  tagline: {
-    zh: '【占位】用一句话介绍你自己，例如你在做什么、想成为怎样的工程师。',
-    en: '[Placeholder] One sentence about yourself: what you work on and what kind of engineer you want to be.',
+  /** Stable GitHub avatar URL (by numeric user id, so it survives username changes). */
+  avatar: 'https://avatars.githubusercontent.com/u/242442733?v=4&s=224',
+  intro: {
+    zh: '探索 AI Agent、算法与软件工程，在学习和实践中持续记录与积累。',
+    en: 'Exploring AI agents, algorithms, and software engineering. Learning, building, and documenting along the way.',
   },
   /** Topics currently being studied. */
   focus: {

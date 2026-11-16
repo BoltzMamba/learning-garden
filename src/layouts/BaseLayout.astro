@@ -13,9 +13,11 @@ interface Props {
   wide?: boolean;
   /** Pages without a localised twin (404) disable canonical/alternate links. */
   standalone?: boolean;
+  /** Full-screen hero page: overlay header + `hero` slot rendered full-bleed. */
+  immersive?: boolean;
 }
 
-const { lang, title, description, wide = false, standalone = false } = Astro.props;
+const { lang, title, description, wide = false, standalone = false, immersive = false } = Astro.props;
 const t = useTranslations(lang);
 const pageTitle = title ? `${title} · ${t('site.name')}` : `${t('site.name')} — ${t('site.tagline')}`;
 const pageDescription = description ?? t('site.description');
@@ -51,7 +53,7 @@ const canonical = new URL(localePath(lang, path), Astro.site);
     <!-- Non-blocking web fonts; system fonts render first. -->
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       media="print"
       onload="this.media='all'"
     />
@@ -64,7 +66,8 @@ const canonical = new URL(localePath(lang, path), Astro.site);
     >
       {t('nav.skip')}
     </a>
-    <Header lang={lang} path={path} />
+    <Header lang={lang} path={path} overlay={immersive} />
+    <slot name="hero" />
     <main id="main" class:list={['mx-auto w-full flex-1 px-4 sm:px-6 py-8 sm:py-12', wide ? 'max-w-[1000px]' : 'max-w-[760px]']}>
       <slot />
     </main>

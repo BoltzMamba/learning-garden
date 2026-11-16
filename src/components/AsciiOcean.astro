@@ -1,165 +1,72 @@
 ---
 /**
- * Decorative ASCII ocean. Pure text + CSS animation; hidden from assistive
- * tech; motion stops under prefers-reduced-motion.
+ * Full-bleed ASCII ocean background. Place inside a positioned host with
+ * `data-ocean-host`; an element marked `data-ocean-avoid` in the host
+ * becomes the clearing that fish swim around.
+ *
+ * Purely decorative: aria-hidden, pointer-events: none. Without JS (or
+ * before it runs) the host still shows the CSS character grid.
  */
-const fill = (seed: string, length = 220) => seed.repeat(Math.ceil(length / seed.length)).slice(0, length);
-
-const sky = fill('   .          ·                *         .            ·        ');
-const waves = [
-  // Each copy must be wider than the container (≈1000px ≈ 130ch) for a seamless loop.
-  { text: fill('.~"~._', 240), speed: '120s', dir: 'normal', tone: 'w1' },
-  { text: fill('~~^~~~~~^~~~', 240), speed: '90s', dir: 'reverse', tone: 'w2' },
-  { text: fill('-~~-~-~~~--~-~', 252), speed: '60s', dir: 'normal', tone: 'w3' },
-];
-const deep = [
-  fill('      o                          .                     °                   '),
-  fill('   °            .                               o                 .        '),
-  fill('                          °                                                '),
-];
-const seabed = fill('   \\|/     )\\      .:.      (    \\|/      ,  )(     ·   \\|/    (     ');
-const sand = fill("_,._.,-'~'-.,_.,._,-'~'-.,_");
 ---
 
-<div class="ocean card" aria-hidden="true">
-  <div class="row sky">{sky}</div>
-  {
-    waves.map((w) => (
-      <div class:list={['row', 'wave', w.tone]} style={`--speed:${w.speed};--dir:${w.dir}`}>
-        <span>{w.text}</span>
-        <span>{w.text}</span>
-      </div>
-    ))
-  }
-  <div class="deep">
-    {deep.map((line) => <div class="row bubbles">{line}</div>)}
-    <span class="fish fish-a">&gt;&lt;(((º&gt;</span>
-    <span class="fish fish-b">&lt;º)))&gt;&lt;</span>
-    <span class="fish fish-c">&gt;&lt;&gt;</span>
-  </div>
-  <div class="row seabed">{seabed}</div>
-  <div class="row sand">{sand}</div>
-  <span class="tag">~/ocean</span>
-</div>
+<canvas class="ocean-canvas" aria-hidden="true" data-ocean-canvas></canvas>
 
 <style>
-  .ocean {
-    position: relative;
-    overflow: hidden;
-    padding: 1rem 0 0.75rem;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    line-height: 1.35;
-    color: var(--text-muted);
-    user-select: none;
-    background:
-      linear-gradient(to bottom, transparent 0%, color-mix(in srgb, var(--ocean-1) 10%, transparent) 45%,
-        color-mix(in srgb, var(--ocean-2) 14%, transparent) 100%),
-      var(--surface);
-  }
-  @media (max-width: 640px) {
-    .ocean {
-      font-size: 11px;
-    }
-  }
-  .row {
-    white-space: pre;
-    padding-left: 1rem;
-  }
-  .sky {
-    color: color-mix(in srgb, var(--text-muted) 70%, transparent);
-  }
-  .wave {
-    display: flex;
-    width: max-content;
-    padding-left: 0;
-    animation: drift var(--speed) linear infinite;
-    animation-direction: var(--dir);
-  }
-  .w1 {
-    color: var(--ocean-2);
-  }
-  .w2 {
-    color: color-mix(in srgb, var(--ocean-2) 75%, var(--accent));
-  }
-  .w3 {
-    color: var(--accent);
-  }
-  .deep {
-    position: relative;
-  }
-  .bubbles {
-    color: color-mix(in srgb, var(--ocean-2) 70%, transparent);
-  }
-  .fish {
+  .ocean-canvas {
     position: absolute;
-    white-space: pre;
-    color: var(--fish);
-  }
-  .fish-a {
-    top: 0.2em;
-    left: 18%;
-    animation: swim-right 38s linear infinite;
-  }
-  .fish-b {
-    top: 1.55em;
-    left: 64%;
-    color: var(--accent);
-    animation: swim-left 52s linear infinite;
-    animation-delay: -20s;
-  }
-  .fish-c {
-    top: 2.9em;
-    left: 40%;
-    opacity: 0.8;
-    animation: swim-right 64s linear infinite;
-    animation-delay: -40s;
-  }
-  .seabed {
-    color: var(--accent);
-  }
-  .sand {
-    color: color-mix(in srgb, var(--text-muted) 80%, transparent);
-  }
-  .tag {
-    position: absolute;
-    top: 0.5rem;
-    right: 0.75rem;
-    font-size: 11px;
-    color: var(--text-muted);
-    background: var(--surface);
-    padding: 0 0.375rem;
-    border-radius: 4px;
-    opacity: 0.85;
-  }
-  @keyframes drift {
-    from {
-      transform: translateX(0);
-    }
-    to {
-      transform: translateX(-50%);
-    }
-  }
-  @keyframes swim-right {
-    from {
-      left: -12%;
-    }
-    to {
-      left: 104%;
-    }
-  }
-  @keyframes swim-left {
-    from {
-      left: 104%;
-    }
-    to {
-      left: -12%;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .wave,
-    .fish {
-      animation: none !important;
-    }
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
   }
 </style>
+
+<script>
+  import { AsciiOcean } from '../scripts/ascii-ocean.ts';
+
+  for (const canvas of document.querySelectorAll<HTMLCanvasElement>('[data-ocean-canvas]')) {
+    const host = canvas.closest<HTMLElement>('[data-ocean-host]');
+    if (!host) continue;
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const ocean = new AsciiOcean(host, canvas, host.querySelector<HTMLElement>('[data-ocean-avoid]'), motion.matches);
+
+    let visible = true;
+    const sync = () => (visible && !document.hidden && !motion.matches ? ocean.start() : ocean.stop());
+
+    // Pause when scrolled away or the tab is hidden.
+    new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      sync();
+    }).observe(host);
+    document.addEventListener('visibilitychange', sync);
+    motion.addEventListener('change', () => {
+      ocean.setReducedMotion(motion.matches);
+      sync();
+    });
+
+    // Theme switch → re-read colours from CSS variables.
+    new MutationObserver(() => ocean.readPalette()).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+
+    let resizeTimer = 0;
+    let lastWidth = window.innerWidth;
+    window.addEventListener('resize', () => {
+      // Mobile browsers fire resize when the URL bar shows/hides; only rebuild on width changes
+      // or substantial height changes.
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        if (window.innerWidth !== lastWidth || Math.abs(host.clientHeight - canvas.clientHeight) > 120) {
+          lastWidth = window.innerWidth;
+          ocean.resize();
+        }
+      }, 150);
+    });
+    document.fonts?.ready.then(() => ocean.readPalette());
+
+    host.addEventListener('pointermove', (e) => ocean.pointer(e.clientX, e.clientY), { passive: true });
+    sync();
+  }
+</script>

@@ -177,4 +177,8 @@ UI strings live in `src/i18n/ui.ts`, and TypeScript makes sure `en` has every ke
 
 ## Personalising
 
-Edit `src/data/profile.ts`. The tagline is a clearly marked **placeholder** until you write your own. Future sections (Projects, About, experience) can be added as new content collections in `src/content.config.ts`, with new routes under `src/pages/[lang]/`. Add a link to `Header.astro` only once the page exists.
+The homepage hero reads from `src/data/profile.ts`: name, avatar URL (the GitHub avatar, fetched by user ID), the zh/en introduction and the current interests. Keep it factual.
+
+The ASCII ocean behind the hero is `src/components/AsciiOcean.astro`, driven by `src/scripts/ascii-ocean.ts` (a dependency-free canvas character grid). Its colours are the `--ocean-*` variables in `src/styles/global.css`, with one set per theme. It stops animating under `prefers-reduced-motion`, when the tab is hidden, and when scrolled out of view.
+
+Future sections (Projects, About, experience) can be added as new content collections in `src/content.config.ts`, with new routes under `src/pages/[lang]/`. Add a link to `Header.astro` only once the page exists.

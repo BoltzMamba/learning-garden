@@ -11,9 +11,16 @@
   --border: #d9e0dc;
   --accent: #2c7a63;
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
-  --ocean-1: #7aa7a0;
-  --ocean-2: #4e8b80;
-  --fish: #c98a3c;
+  /* ASCII ocean (light): paper, teal-gray ink */
+  --ocean-grid: rgba(31, 42, 46, 0.045);
+  --ocean-ink: #5b7571;
+  --ocean-ink-strong: #263b38;
+  --ocean-water: #87a09b;
+  --ocean-block: #7d948f;
+  --ocean-block-strength: 1.25;
+  --ocean-accent-1: #6fae98;
+  --ocean-accent-2: #c79b67;
+  --ocean-accent-3: #9a94c2;
   --cal-0: #e6ebe7;
   --cal-1: #b5dbcb;
   --cal-2: #7fc1a7;
@@ -32,9 +39,16 @@
   --border: #334349;
   --accent: #78bba4;
   --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
-  --ocean-1: #3d5f63;
-  --ocean-2: #5f8f8a;
-  --fish: #e0b46c;
+  /* ASCII ocean (dark): deep charcoal, muted seafoam */
+  --ocean-grid: rgba(233, 241, 238, 0.035);
+  --ocean-ink: #6f968e;
+  --ocean-ink-strong: #cde5dc;
+  --ocean-water: #4c6c67;
+  --ocean-block: #78bba4;
+  --ocean-block-strength: 0.75;
+  --ocean-accent-1: #78bba4;
+  --ocean-accent-2: #d6ae78;
+  --ocean-accent-3: #9e99cc;
   --cal-0: #1f2c32;
   --cal-1: #24483f;
   --cal-2: #2f6b58;
