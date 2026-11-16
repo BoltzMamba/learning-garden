@@ -57,7 +57,9 @@ const t = useTranslations(lang);
 
 <style>
   .ocean-hero {
-    --ocean-cell: 14px;
+    /* Cell size is set by the renderer (glyph-shaped cells); this is the no-JS fallback. */
+    --ocean-cw: 12px;
+    --ocean-ch: 17px;
     position: relative;
     isolation: isolate;
     display: grid;
@@ -67,21 +69,11 @@ const t = useTranslations(lang);
     padding: 5.5rem 1rem 6rem;
     overflow: hidden;
     background-color: var(--bg);
-    /* Graph-paper grid; also the no-JS fallback. Cells align with the canvas grid. */
+    /* Character-cell grid; also the no-JS fallback. Cells align with the canvas grid. */
     background-image:
       linear-gradient(to bottom, var(--ocean-grid) 1px, transparent 1px),
       linear-gradient(to right, var(--ocean-grid) 1px, transparent 1px);
-    background-size: var(--ocean-cell) var(--ocean-cell);
-  }
-  @media (min-width: 640px) {
-    .ocean-hero {
-      --ocean-cell: 16px;
-    }
-  }
-  @media (min-width: 1024px) {
-    .ocean-hero {
-      --ocean-cell: 18px;
-    }
+    background-size: var(--ocean-cw) var(--ocean-ch);
   }
 
   /* Soft, unbounded clearing behind the profile (no panel, no border). */

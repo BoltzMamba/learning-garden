@@ -50,8 +50,8 @@ export const SPECIES: Species[] = [
   { name: 'sardine', shape: null, tone: 1, cruise: 36, maxSpeed: 64, minSpeed: 18, weight: 3, school: [14, 24], spacing: [1.8, 1.1], align: 1.6, cohesion: 1.5, jitter: 40, verticalDrag: 0.6 },
   { name: 'anchovy', shape: null, tone: 0, cruise: 44, maxSpeed: 76, minSpeed: 22, weight: 3, school: [16, 28], spacing: [1.5, 1], align: 3, cohesion: 0.5, jitter: 30, verticalDrag: 1.4 },
   { name: 'silverside', shape: null, tone: 2, cruise: 40, maxSpeed: 70, minSpeed: 20, weight: 2, school: [10, 16], spacing: [2, 1.1], align: 2.4, cohesion: 1.1, jitter: 35, verticalDrag: 1.6 },
-  { name: 'mackerel', shape: { right: '><>', left: '<><' }, tone: 2, cruise: 30, maxSpeed: 58, minSpeed: 14, weight: 1, school: [3, 6], spacing: [5.5, 2.2], align: 2, cohesion: 0.9, jitter: 22, verticalDrag: 2 },
-  { name: 'goby', shape: { right: '°>', left: '<°' }, tone: 1, cruise: 24, maxSpeed: 52, minSpeed: 10, weight: 0.8, school: [4, 7], spacing: [3.6, 1.8], align: 0.6, cohesion: 1.1, jitter: 70, verticalDrag: 0.4 },
+  { name: 'mackerel', shape: null, tone: 2, cruise: 30, maxSpeed: 58, minSpeed: 14, weight: 1, school: [3, 6], spacing: [5.5, 2.2], align: 2, cohesion: 0.9, jitter: 22, verticalDrag: 2 },
+  { name: 'goby', shape: null, tone: 1, cruise: 24, maxSpeed: 52, minSpeed: 10, weight: 0.8, school: [4, 7], spacing: [3.6, 1.8], align: 0.6, cohesion: 1.1, jitter: 70, verticalDrag: 0.4 },
 ];
 
 export interface SmallFish {
@@ -126,7 +126,9 @@ const MAX_FORCE_SEEK = 170;
 export interface SimOptions {
   width: number;
   height: number;
+  /** Cell width; `cellH` defaults to it (square cells). */
   cell: number;
+  cellH?: number;
   rng: Rng;
   /** Region fish keep out of (the profile). */
   avoid?: Ellipse;
@@ -142,6 +144,7 @@ export class OceanSim {
   width: number;
   height: number;
   cell: number;
+  cellH: number;
   rng: Rng;
   avoid: Ellipse | undefined;
   time = 0;
@@ -162,6 +165,7 @@ export class OceanSim {
     this.width = opts.width;
     this.height = opts.height;
     this.cell = opts.cell;
+    this.cellH = opts.cellH ?? opts.cell;
     this.rng = opts.rng;
     this.avoid = opts.avoid;
     this.perception = Math.max(60, opts.cell * 5);
@@ -209,7 +213,7 @@ export class OceanSim {
       }
       const heading = (this.rng() < 0.5 ? 0 : Math.PI) + this.range(-0.4, 0.4);
       const spreadX = sp.spacing[0] * this.cell * Math.sqrt(size) * 0.9;
-      const spreadY = sp.spacing[1] * this.cell * Math.sqrt(size) * 0.55;
+      const spreadY = sp.spacing[1] * this.cellH * Math.sqrt(size) * 0.55;
       for (let i = 0; i < size; i++) {
         const speed = sp.cruise * this.range(0.85, 1.15);
         this.fish.push({
@@ -232,12 +236,13 @@ export class OceanSim {
     this.maxChasers = Math.max(3, Math.min(FEED.maxChasers, Math.round(this.fish.length / 40)));
   }
 
-  resize(width: number, height: number, cell: number, avoid?: Ellipse) {
+  resize(width: number, height: number, cell: number, avoid?: Ellipse, cellH = cell) {
     const sx = width / (this.width || width);
     const sy = height / (this.height || height);
     this.width = width;
     this.height = height;
     this.cell = cell;
+    this.cellH = cellH;
     this.avoid = avoid;
     this.perception = Math.max(60, cell * 5);
     for (const f of this.fish) {
@@ -328,14 +333,15 @@ export class OceanSim {
     for (const f of this.fish) if (f.target >= 0) chasers.set(f.target, (chasers.get(f.target) ?? 0) + 1);
 
     const perception2 = this.perception * this.perception;
-    const sense = FEED.senseCells * this.cell;
-    const eatRadius = this.cell * 0.9;
+    // Pixel radii with floors, so narrow glyph cells don't shrink the fish's senses.
+    const sense = Math.max(FEED.senseCells * this.cell, 180);
+    const eatRadius = Math.max(16, this.cell, this.cellH) * 0.9;
 
     for (let i = 0; i < this.fish.length; i++) {
       const f = this.fish[i];
       const sp = SPECIES[f.species];
       const sepX = sp.spacing[0] * this.cell;
-      const sepY = sp.spacing[1] * this.cell;
+      const sepY = sp.spacing[1] * this.cellH;
       let ax = 0;
       let ay = 0;
 
@@ -393,8 +399,10 @@ export class OceanSim {
             if (e2 < 1) {
               const e = Math.sqrt(e2) || 0.001;
               const push = Math.min(4, (1 - e) / e);
-              ax -= ex * push * SEPARATION * 0.5;
-              ay -= ey * push * SEPARATION * 0.5;
+              // Feeding fish tolerate crowding around a pellet.
+              const crowd = food ? 0.35 : 1;
+              ax -= ex * push * SEPARATION * 0.5 * crowd;
+              ay -= ey * push * SEPARATION * 0.5 * crowd;
             }
             if (o.species === f.species) {
               avx += o.vx;
@@ -441,7 +449,8 @@ export class OceanSim {
         const dy = f.y - ob.y;
         const d = Math.hypot(dx, dy);
         if (d < ob.r && d > 0.001) {
-          const s = (1 - d / ob.r) * 500;
+          // Hungry fish dare to swim closer to big creatures.
+          const s = (1 - d / ob.r) * (food ? 160 : 500);
           ax += (dx / d) * s;
           ay += (dy / d) * s;
         }

@@ -21,6 +21,16 @@
   --ocean-accent-1: #6fae98;
   --ocean-accent-2: #c79b67;
   --ocean-accent-3: #9a94c2;
+  /* Big ASCII creatures (light): grey skin blocks, dark glyphs */
+  --creature-shadow: #8a9298;
+  --creature-light: #e4e7e9;
+  --creature-glyph-light: #16191e;
+  --creature-glyph-dark: #1d2026;
+  --creature-edge: #6f787e;
+  --creature-eye: #f2f4f5;
+  --creature-glint: #ffffff;
+  --creature-accents: #d58a3a #a65fd0 #3fa8b0 #4e9e5a #4f66d8 #c9aa45;
+  --creature-tint: 0.35;
   --cal-0: #e6ebe7;
   --cal-1: #b5dbcb;
   --cal-2: #7fc1a7;
@@ -49,6 +59,16 @@
   --ocean-accent-1: #78bba4;
   --ocean-accent-2: #d6ae78;
   --ocean-accent-3: #9e99cc;
+  /* Big ASCII creatures (dark): slate skin blocks lit from above */
+  --creature-shadow: #1e282d;
+  --creature-light: #b3c2c6;
+  --creature-glyph-light: #0c0f12;
+  --creature-glyph-dark: #9fb1b5;
+  --creature-edge: #7f9094;
+  --creature-eye: #c9d4d7;
+  --creature-glint: #e9f3f5;
+  --creature-accents: #e0892c #b44ae0 #33c8cc #3cb54a #5b74f0 #d9c14a;
+  --creature-tint: 1;
   --cal-0: #1f2c32;
   --cal-1: #24483f;
   --cal-2: #2f6b58;
