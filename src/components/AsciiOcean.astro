@@ -4,8 +4,9 @@
  * `data-ocean-host`; an element marked `data-ocean-avoid` in the host
  * becomes the clearing that fish swim around.
  *
- * Purely decorative: aria-hidden, pointer-events: none. Without JS (or
- * before it runs) the host still shows the CSS character grid.
+ * Decorative canvas: aria-hidden, pointer-events: none. The host listens for
+ * clicks/taps on empty ocean to drop fish food; clicks on links, buttons and
+ * the profile are ignored. Without JS the host still shows the CSS grid.
  */
 ---
 
@@ -25,48 +26,94 @@
 <script>
   import { AsciiOcean } from '../scripts/ascii-ocean.ts';
 
-  for (const canvas of document.querySelectorAll<HTMLCanvasElement>('[data-ocean-canvas]')) {
+  /** Elements whose clicks must never feed the fish. */
+  const INTERACTIVE = 'a, button, input, select, textarea, label, summary, [role="button"], [data-ocean-avoid]';
+
+  function mount(canvas: HTMLCanvasElement): () => void {
     const host = canvas.closest<HTMLElement>('[data-ocean-host]');
-    if (!host) continue;
+    if (!host) return () => {};
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const ocean = new AsciiOcean(host, canvas, host.querySelector<HTMLElement>('[data-ocean-avoid]'), motion.matches);
+    const abort = new AbortController();
+    const signal = abort.signal;
 
     let visible = true;
     const sync = () => (visible && !document.hidden && !motion.matches ? ocean.start() : ocean.stop());
 
     // Pause when scrolled away or the tab is hidden.
-    new IntersectionObserver(([entry]) => {
+    const io = new IntersectionObserver(([entry]) => {
       visible = entry.isIntersecting;
       sync();
-    }).observe(host);
-    document.addEventListener('visibilitychange', sync);
-    motion.addEventListener('change', () => {
-      ocean.setReducedMotion(motion.matches);
-      sync();
     });
+    io.observe(host);
+    document.addEventListener('visibilitychange', sync, { signal });
+    motion.addEventListener(
+      'change',
+      () => {
+        ocean.setReducedMotion(motion.matches);
+        sync();
+      },
+      { signal },
+    );
 
     // Theme switch → re-read colours from CSS variables.
-    new MutationObserver(() => ocean.readPalette()).observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme'],
-    });
+    const mo = new MutationObserver(() => ocean.readPalette());
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     let resizeTimer = 0;
     let lastWidth = window.innerWidth;
-    window.addEventListener('resize', () => {
-      // Mobile browsers fire resize when the URL bar shows/hides; only rebuild on width changes
-      // or substantial height changes.
-      window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => {
-        if (window.innerWidth !== lastWidth || Math.abs(host.clientHeight - canvas.clientHeight) > 120) {
-          lastWidth = window.innerWidth;
-          ocean.resize();
-        }
-      }, 150);
-    });
-    document.fonts?.ready.then(() => ocean.readPalette());
+    window.addEventListener(
+      'resize',
+      () => {
+        // Mobile URL-bar show/hide fires resize; only rebuild on real size changes.
+        window.clearTimeout(resizeTimer);
+        resizeTimer = window.setTimeout(() => {
+          if (window.innerWidth !== lastWidth || Math.abs(host.clientHeight - canvas.clientHeight) > 120) {
+            lastWidth = window.innerWidth;
+            ocean.resize();
+          }
+        }, 150);
+      },
+      { signal },
+    );
+    document.fonts?.ready.then(() => !signal.aborted && ocean.readPalette());
 
-    host.addEventListener('pointermove', (e) => ocean.pointer(e.clientX, e.clientY), { passive: true });
+    // Hover ripples for mice only (touch moves are scrolls).
+    host.addEventListener(
+      'pointermove',
+      (e) => {
+        if (e.pointerType === 'mouse') ocean.pointer(e.clientX, e.clientY);
+      },
+      { passive: true, signal },
+    );
+
+    // Click / tap on open water → drop food.
+    host.addEventListener(
+      'click',
+      (e) => {
+        const target = e.target as Element | null;
+        if (!target || target.closest(INTERACTIVE)) return;
+        if (window.getSelection()?.toString()) return; // finishing a text selection, not a tap
+        ocean.feedAt(e.clientX, e.clientY);
+      },
+      { signal },
+    );
+
+    if (new URLSearchParams(location.search).has('ocean-debug')) {
+      (window as unknown as { __ocean: AsciiOcean }).__ocean = ocean;
+    }
+
     sync();
+    return () => {
+      abort.abort();
+      io.disconnect();
+      mo.disconnect();
+      window.clearTimeout(resizeTimer);
+      ocean.stop();
+    };
   }
+
+  const cleanups = [...document.querySelectorAll<HTMLCanvasElement>('[data-ocean-canvas]')].map(mount);
+  // Tear down if the page is swapped out (e.g. Astro view transitions).
+  document.addEventListener('astro:before-swap', () => cleanups.forEach((fn) => fn()), { once: true });
 </script>

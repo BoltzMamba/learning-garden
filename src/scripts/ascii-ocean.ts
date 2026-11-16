@@ -1,16 +1,16 @@
 /**
- * ASCII ocean renderer: a character grid drawn on one canvas.
+ * ASCII ocean renderer: one canvas, one character grid.
  *
- * Layers (back → front, all in the same grid):
- *   1. currents  – sparse dash streaks from drifting value noise
- *   2. plankton  – a few slow particles, plus bubbles from fish
- *   3. ripples   – short-lived rings where the pointer moves
- *   4. fish      – procedural silhouettes rasterised into glyph cells
+ * Layers (front-most claims a cell first):
+ *   1. food pellets + crumbs   (click / tap to feed)
+ *   2. big fish                (1–2 procedural glyph silhouettes)
+ *   3. small fish schools      (simulated in ocean-sim.ts)
+ *   4. bubbles, plankton, hover ripples
  *
- * The grid lines themselves are CSS (so they also show without JS).
- * Fish swim in lanes above/below the profile and fade near it.
- * Colours come from CSS custom properties, so both themes are handled in CSS.
+ * Grid lines are CSS (also the no-JS fallback). Colours come from CSS custom
+ * properties, so light/dark themes are handled in CSS.
  */
+import { FEED, mulberry32, OceanSim, SPECIES, type Ellipse } from './ocean-sim.ts';
 
 interface Palette {
   ink: string;
@@ -21,7 +21,7 @@ interface Palette {
   accents: string[];
 }
 
-interface Fish {
+interface BigFish {
   x: number;
   y: number;
   baseY: number;
@@ -29,7 +29,6 @@ interface Fish {
   h: number;
   speed: number;
   dir: 1 | -1;
-  /** Vertical cells travelled per horizontal cell (slanted paths). */
   slope: number;
   phase: number;
   amp: number;
@@ -52,12 +51,18 @@ interface Ripple {
   c: number;
   r: number;
   t0: number;
+  strength: number;
 }
 
 const EDGE = ".,:;'`";
 const MID = 'tSX%o:s';
 const CORE = '8#@%XS8';
 const PLANKTON = "·.'`,";
+/** Glyph colour slots. */
+const WATER = 0;
+const INK = 1;
+const STRONG = 2;
+const FOOD = 3;
 
 function hash3(a: number, b: number, c: number): number {
   let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263) ^ Math.imul(c | 0, 1442695041);
@@ -66,34 +71,32 @@ function hash3(a: number, b: number, c: number): number {
   return (h >>> 0) / 4294967296;
 }
 
-function noise2(x: number, y: number, seed: number): number {
-  const xi = Math.floor(x);
-  const yi = Math.floor(y);
-  const xf = x - xi;
-  const yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf);
-  const v = yf * yf * (3 - 2 * yf);
-  const a = hash3(xi, yi, seed);
-  const b = hash3(xi + 1, yi, seed);
-  const c = hash3(xi, yi + 1, seed);
-  const d = hash3(xi + 1, yi + 1, seed);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
-
 const smoothstep = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+/** Single-cell fish: level dash, tilting only when clearly climbing/diving (screen y points down). */
+function dashFor(vx: number, vy: number): string {
+  const a = Math.atan2(Math.abs(vy), Math.abs(vx)); // 0 = level, π/2 = vertical
+  if (a < 0.95) return '-';
+  return vx * vy > 0 ? '\\' : '/';
+}
+
 export class AsciiOcean {
+  private host: HTMLElement;
+  private canvas: HTMLCanvasElement;
+  private avoidEl: HTMLElement | null;
+  private reducedMotion: boolean;
   private ctx: CanvasRenderingContext2D;
   private cell = 18;
   private cols = 0;
   private rows = 0;
   private dpr = 1;
   private palette!: Palette;
-  private fish: Fish[] = [];
+  private sim: OceanSim | undefined;
+  private bigFish: BigFish[] = [];
   private particles: Particle[] = [];
   private ripples: Ripple[] = [];
   private time = 0;
@@ -101,20 +104,14 @@ export class AsciiOcean {
   private raf = 0;
   private running = false;
   private seed = Math.floor(Math.random() * 1e6);
-  /** Profile exclusion ellipse in cell units. */
+  /** Profile clearing in cell units. */
   private avoid = { cx: 0, cy: 0, rx: 1, ry: 1, top: 0, bottom: 0 };
-  // Per-frame cell buffers
   private glyph: string[] = [];
   private glyphAlpha = new Float32Array(0);
   private glyphColor = new Uint8Array(0);
   private blockAlpha = new Float32Array(0);
   private blockColor = new Uint8Array(0);
   private lastRipple = { c: -1, r: -1, t: 0 };
-
-  private host: HTMLElement;
-  private canvas: HTMLCanvasElement;
-  private avoidEl: HTMLElement | null;
-  private reducedMotion: boolean;
 
   constructor(host: HTMLElement, canvas: HTMLCanvasElement, avoidEl: HTMLElement | null, reducedMotion: boolean) {
     this.host = host;
@@ -169,13 +166,32 @@ export class AsciiOcean {
     } else {
       this.avoid = { cx: this.cols / 2, cy: this.rows / 2, rx: 1, ry: 1, top: this.rows / 2, bottom: this.rows / 2 };
     }
+    const avoidPx: Ellipse = {
+      cx: this.avoid.cx * this.cell,
+      cy: this.avoid.cy * this.cell,
+      rx: this.avoid.rx * this.cell,
+      ry: this.avoid.ry * this.cell,
+    };
+
+    if (this.sim) {
+      this.sim.resize(rect.width, rect.height, this.cell, avoidPx);
+    } else {
+      this.sim = new OceanSim({
+        width: rect.width,
+        height: rect.height,
+        cell: this.cell,
+        rng: mulberry32(this.seed),
+        avoid: avoidPx,
+      });
+      // Let schools form before the first frame (also the reduced-motion still).
+      this.sim.step(3);
+    }
 
     const narrow = this.cols < 40;
-    const count = Math.max(3, Math.min(7, Math.round((this.cols * this.rows) / (narrow ? 420 : 650))));
-    this.fish = [];
-    for (let i = 0; i < count; i++) this.fish.push(this.spawn(i, true));
+    this.bigFish = [];
+    for (let i = 0; i < (narrow ? 1 : 2); i++) this.bigFish.push(this.spawnBig(i, true));
     this.particles = [];
-    const plankton = Math.round((this.cols * this.rows) / 140);
+    const plankton = Math.round((this.cols * this.rows) / 320);
     for (let i = 0; i < plankton; i++) this.particles.push(this.spawnPlankton(true));
     this.draw();
   }
@@ -201,14 +217,13 @@ export class AsciiOcean {
     return bands[0][0];
   }
 
-  private spawn(i: number, initial: boolean): Fish {
+  private spawnBig(i: number, initial: boolean): BigFish {
     const narrow = this.cols < 40;
     const depth = this.rand(i, 1);
-    const len = narrow ? lerp(8, 12, depth) : lerp(11, 22, depth);
+    const len = narrow ? lerp(7, 9, depth) : lerp(10, 15, depth);
     const h = len * 0.27;
     const dir: 1 | -1 = this.rand(i, 2) < 0.5 ? 1 : -1;
     const baseY = this.pickLane(this.rand(i, 3), h);
-    // Initially spread across the scene; later, enter from the side it swims from.
     const x = initial ? this.rand(i, 4) * (this.cols + len) - len / 2 : dir === 1 ? -len - 2 : this.cols + len + 2;
     return {
       x,
@@ -216,9 +231,9 @@ export class AsciiOcean {
       baseY,
       len,
       h,
-      speed: lerp(0.45, 1.15, depth) * (narrow ? 0.8 : 1),
+      speed: lerp(0.8, 1.5, depth) * (narrow ? 0.8 : 1),
       dir,
-      slope: (this.rand(i, 9) - 0.5) * 0.5,
+      slope: (this.rand(i, 9) - 0.5) * 0.4,
       phase: this.rand(i, 5) * Math.PI * 2,
       amp: lerp(0.3, 1.2, this.rand(i, 6)),
       seed: Math.floor(this.rand(i, 7) * 1e6),
@@ -268,27 +283,55 @@ export class AsciiOcean {
     if (reduced) {
       this.stop();
       this.ripples = [];
+      if (this.sim) {
+        this.sim.pellets = [];
+        this.sim.crumbs = [];
+        for (const f of this.sim.fish) f.target = -1;
+      }
       this.draw();
     }
   }
 
+  /** Hover ripple (mouse only). */
   pointer(clientX: number, clientY: number) {
     if (this.reducedMotion) return;
     const rect = this.host.getBoundingClientRect();
     const c = Math.floor((clientX - rect.left) / this.cell);
     const r = Math.floor((clientY - rect.top) / this.cell);
     const now = this.time;
-    if (Math.abs(c - this.lastRipple.c) + Math.abs(r - this.lastRipple.r) < 3 && now - this.lastRipple.t < 0.4) return;
+    if (Math.abs(c - this.lastRipple.c) + Math.abs(r - this.lastRipple.r) < 4 && now - this.lastRipple.t < 0.6) return;
     this.lastRipple = { c, r, t: now };
-    this.ripples.push({ c, r, t0: now });
-    if (this.ripples.length > 12) this.ripples.shift();
+    this.ripples.push({ c, r, t0: now, strength: 0.35 });
+    if (this.ripples.length > 8) this.ripples.shift();
+  }
+
+  /** Drop food at a viewport point. Returns false when feeding is disabled. */
+  feedAt(clientX: number, clientY: number): boolean {
+    if (this.reducedMotion || !this.sim) return false;
+    const rect = this.host.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    this.sim.feed(x, y);
+    this.ripples.push({ c: Math.floor(x / this.cell), r: Math.floor(y / this.cell), t0: this.time, strength: 0.6 });
+    if (!this.running) this.draw();
+    return true;
+  }
+
+  /** Test/debug hook: current simulation state. */
+  get state() {
+    return this.sim;
   }
 
   // --------------------------------------------------------------- update
 
   private update(dt: number) {
     this.time += dt;
-    this.fish.forEach((f, i) => {
+    const sim = this.sim!;
+    // Big fish give the schools some room.
+    sim.obstacles = this.bigFish.map((f) => ({ x: f.x * this.cell, y: f.y * this.cell, r: f.len * this.cell * 0.6 }));
+    sim.step(dt);
+
+    this.bigFish.forEach((f, i) => {
       f.x += f.dir * f.speed * dt;
       f.baseY += f.slope * f.speed * dt;
       f.y = f.baseY + Math.sin(f.phase + this.time * 0.22) * f.amp;
@@ -297,20 +340,10 @@ export class AsciiOcean {
         (f.dir === -1 && f.x < -f.len - 2) ||
         f.y < -f.len ||
         f.y > this.rows + f.len;
-      if (gone) {
-        this.fish[i] = this.spawn(i + Math.floor(this.time), false);
-      }
+      if (gone) this.bigFish[i] = this.spawnBig(i + Math.floor(this.time), false);
       if (this.time > f.bubbleAt) {
         f.bubbleAt = this.time + 4 + Math.random() * 8;
-        this.particles.push({
-          x: f.x + (f.dir * f.len) / 2,
-          y: f.y - f.h * 0.3,
-          vx: 0,
-          vy: -0.6,
-          life: 0,
-          max: 4 + Math.random() * 2,
-          bubble: true,
-        });
+        this.particles.push({ x: f.x + (f.dir * f.len) / 2, y: f.y - f.h * 0.3, vx: 0, vy: -0.6, life: 0, max: 5, bubble: true });
       }
     });
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -335,15 +368,17 @@ export class AsciiOcean {
 
   // ----------------------------------------------------------------- draw
 
-  private put(i: number, ch: string, alpha: number, color: number) {
+  /** Claim a free cell. Returns false if it was already taken. */
+  private put(i: number, ch: string, alpha: number, color: number): boolean {
+    if (this.glyph[i]) return false;
     this.glyph[i] = ch;
     this.glyphAlpha[i] = alpha;
     this.glyphColor[i] = color;
+    return true;
   }
 
-  private rasterFish(f: Fish) {
+  private rasterBigFish(f: BigFish) {
     const { cols, rows } = this;
-    // Orient the body along its motion vector (forward F, dorsal side N).
     const vx = f.dir * f.speed;
     const vy = f.slope * f.speed + f.amp * 0.22 * Math.cos(f.phase + this.time * 0.22);
     const ang = Math.max(-0.6, Math.min(0.6, Math.atan(vy / vx)));
@@ -369,7 +404,6 @@ export class AsciiOcean {
         if (u < 0 || u > 1) continue;
         const ly = ly0 - Math.sin(this.time * 2.4 + f.phase - u * 5) * f.h * 0.35 * u * u;
         const up = ly < 0;
-
         let hb: number;
         let inner = 0;
         if (u < 0.28) hb = f.h * Math.pow(u / 0.28, 0.5);
@@ -379,8 +413,8 @@ export class AsciiOcean {
           hb = f.h * (0.28 + 0.95 * k);
           inner = f.h * 0.75 * Math.max(0, (k - 0.45) / 0.55);
         }
-        if (up && u > 0.24 && u < 0.54) hb += f.h * 0.7 * Math.sin((Math.PI * (u - 0.24)) / 0.3); // dorsal fin
-        if (!up && u > 0.3 && u < 0.46) hb += f.h * 0.35 * Math.sin((Math.PI * (u - 0.3)) / 0.16); // pectoral fin
+        if (up && u > 0.24 && u < 0.54) hb += f.h * 0.7 * Math.sin((Math.PI * (u - 0.24)) / 0.3);
+        if (!up && u > 0.3 && u < 0.46) hb += f.h * 0.35 * Math.sin((Math.PI * (u - 0.3)) / 0.16);
         const a = Math.abs(ly);
         if (a > hb + 0.15 || a < inner) continue;
 
@@ -392,42 +426,88 @@ export class AsciiOcean {
         const k = alpha * fade;
         const g = hash3(f.seed, Math.round(u * f.len), Math.round(ly) + 50);
         const eye = Math.abs(u - 0.14) < 0.55 / f.len && Math.abs(ly + f.h * 0.3) < 0.6;
-
         let ch: string;
-        let color = 1; // ink
+        let color = INK;
         if (eye) {
           ch = 'o';
-          color = 2;
+          color = STRONG;
         } else if (d < 0.22) ch = EDGE[Math.floor(g * EDGE.length)];
         else if (d < 0.55) ch = MID[Math.floor(g * MID.length)];
         else {
           ch = CORE[Math.floor(g * CORE.length)];
-          color = 2;
+          color = STRONG;
         }
-        this.put(i, ch, k * lerp(0.55, 1, d), color);
+        if (!this.put(i, ch, k * lerp(0.55, 1, d), color)) continue;
         const accent = hash3(f.seed, Math.round(u * f.len) + 11, Math.round(ly) + 77);
         this.blockAlpha[i] = k * (0.07 + 0.3 * d) * this.palette.blockStrength * (d < 0.12 ? 0.35 : 1);
-        this.blockColor[i] = accent < 0.05 && d > 0.25 ? 1 + Math.floor(accent * 60) % 3 : 0;
+        this.blockColor[i] = accent < 0.05 && d > 0.25 ? 1 + (Math.floor(accent * 60) % 3) : 0;
       }
     }
   }
 
+  private cellIndex(x: number, y: number): number {
+    const c = Math.floor(x / this.cell);
+    const r = Math.floor(y / this.cell);
+    if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return -1;
+    return r * this.cols + c;
+  }
+
   draw() {
-    const { ctx, cols, rows, cell, palette } = this;
-    if (!palette) return;
+    const { ctx, cols, rows, cell, palette, sim } = this;
+    if (!palette || !sim) return;
     const n = cols * rows;
     this.glyph.fill('');
     this.glyphAlpha.fill(0);
     this.blockAlpha.fill(0);
     this.blockColor.fill(0);
+    const t = sim.time;
 
-    // Fish first (front-most layer claims cells), nearest fish last so it wins.
-    [...this.fish].sort((a, b) => a.depth - b.depth).forEach((f) => this.rasterFish(f));
+    // 1. Food (front-most so it is always visible).
+    for (const p of sim.pellets) {
+      const i = this.cellIndex(p.x, p.y);
+      if (i < 0) continue;
+      const age = t - p.born;
+      const fadeIn = Math.min(1, age / 0.25);
+      const fadeOut = Math.min(1, (FEED.life - age) / 2);
+      this.put(i, p.amount > 0.45 ? '•' : '·', Math.max(0, 0.95 * fadeIn * fadeOut * (0.45 + 0.55 * p.amount)), FOOD);
+    }
+    for (const c of sim.crumbs) {
+      const k = (t - c.born) / 0.8;
+      for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1]]) {
+        const i = this.cellIndex(c.x + ox * cell * (0.6 + k), c.y + oy * cell * (0.4 + k));
+        if (i >= 0) this.put(i, '.', 0.6 * (1 - k), FOOD);
+      }
+    }
 
-    const t = this.time;
-    // Ripples
+    // 2. Big fish, nearest first so it wins overlaps.
+    [...this.bigFish].sort((a, b) => b.depth - a.depth).forEach((f) => this.rasterBigFish(f));
+
+    // 3. Small fish schools.
+    for (const f of sim.fish) {
+      const c = Math.floor(f.x / cell);
+      const r = Math.floor(f.y / cell);
+      if (r < 0 || r >= rows) continue;
+      const sp = SPECIES[f.species];
+      const fade = this.clearing(c, r);
+      if (fade <= 0.02) continue;
+      const alpha = (0.4 + 0.6 * f.depth + (f.target >= 0 ? 0.15 : 0)) * fade;
+      if (!sp.shape) {
+        if (c >= 0 && c < cols) this.put(r * cols + c, dashFor(f.vx, f.vy), alpha, sp.tone);
+        continue;
+      }
+      const right = f.vx >= 0;
+      const text = right ? sp.shape.right : sp.shape.left;
+      for (let k = 0; k < text.length; k++) {
+        // Head sits on the fish's cell; the body trails behind it.
+        const cc = right ? c - (text.length - 1 - k) : c + k;
+        if (cc < 0 || cc >= cols) continue;
+        this.put(r * cols + cc, text[k], alpha, sp.tone);
+      }
+    }
+
+    // 4. Ripples, bubbles, plankton.
     for (const rp of this.ripples) {
-      const age = t - rp.t0;
+      const age = this.time - rp.t0;
       const radius = age * 3.2;
       const fadeOut = 1 - age / 1.6;
       const steps = Math.max(8, Math.round(radius * 7));
@@ -436,42 +516,20 @@ export class AsciiOcean {
         const c = Math.round(rp.c + Math.cos(ang) * radius * 1.4);
         const r = Math.round(rp.r + Math.sin(ang) * radius * 0.8);
         if (c < 0 || r < 0 || c >= cols || r >= rows) continue;
-        const i = r * cols + c;
-        if (this.glyph[i]) continue;
-        this.put(i, Math.abs(Math.sin(ang)) < 0.5 ? '~' : '·', 0.55 * fadeOut * this.clearing(c, r), 0);
+        this.put(r * cols + c, Math.abs(Math.sin(ang)) < 0.5 ? '~' : '·', rp.strength * fadeOut * this.clearing(c, r), WATER);
       }
     }
-
-    // Particles
     for (const p of this.particles) {
       const c = Math.floor(p.x);
       const r = Math.floor(p.y);
       if (c < 0 || r < 0 || c >= cols || r >= rows) continue;
       const i = r * cols + c;
-      if (this.glyph[i]) continue;
       if (p.bubble) {
         const k = p.life / p.max;
-        this.put(i, k < 0.35 ? 'o' : k < 0.7 ? '°' : '.', 0.6 * (1 - k) * this.clearing(c, r), 1);
+        this.put(i, k < 0.35 ? 'o' : k < 0.7 ? '°' : '.', 0.6 * (1 - k) * this.clearing(c, r), INK);
       } else {
         const tw = Math.min(1, p.life / 3, (p.max - p.life) / 3);
-        this.put(i, PLANKTON[Math.floor(hash3(c, r, 3) * PLANKTON.length)], 0.35 * tw * this.clearing(c, r), 0);
-      }
-    }
-
-    // Currents: dash streaks where drifting noise peaks
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const i = r * cols + c;
-        if (this.glyph[i]) continue;
-        const density = noise2(c * 0.035 + 50, r * 0.07 - t * 0.012, this.seed + 2);
-        const v = noise2(c * 0.11 - t * 0.09, r * 0.42 + Math.sin(c * 0.05 + t * 0.2) * 0.3, this.seed + 1);
-        const threshold = 0.82 - density * 0.15;
-        if (v < threshold) continue;
-        if (hash3(c, r, this.seed + 9) < 0.38) continue; // broken, hand-drawn streaks
-        const fade = this.clearing(c, r) * 0.75 + 0.25;
-        const strength = Math.min(1, (v - threshold) / 0.12);
-        const alt = hash3(c, r, this.seed);
-        this.put(i, alt < 0.06 ? '~' : alt < 0.1 ? '=' : '-', (0.18 + 0.5 * strength) * fade, 0);
+        this.put(i, PLANKTON[Math.floor(hash3(c, r, 3) * PLANKTON.length)], 0.3 * tw * this.clearing(c, r), WATER);
       }
     }
 
@@ -479,7 +537,7 @@ export class AsciiOcean {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, cols * cell, rows * cell);
     const blockColors = [palette.block, ...palette.accents];
-    const glyphColors = [palette.water, palette.ink, palette.inkStrong];
+    const glyphColors = [palette.water, palette.ink, palette.inkStrong, palette.accents[1]];
     for (let i = 0; i < n; i++) {
       const a = this.blockAlpha[i];
       if (a <= 0.005) continue;
@@ -490,7 +548,7 @@ export class AsciiOcean {
     ctx.font = `500 ${Math.round(cell * 0.76)}px "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    for (let color = 0; color < 3; color++) {
+    for (let color = 0; color < glyphColors.length; color++) {
       ctx.fillStyle = glyphColors[color];
       for (let i = 0; i < n; i++) {
         const ch = this.glyph[i];
