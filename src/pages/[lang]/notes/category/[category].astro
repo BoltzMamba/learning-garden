@@ -1,31 +1,53 @@
 ---
+/**
+ * One page per section. Pre-section category slugs (e.g. meta) still get a
+ * page that redirects to their section, so old links keep working.
+ */
 import BaseLayout from '../../../../layouts/BaseLayout.astro';
 import NoteList from '../../../../components/NoteList.astro';
 import CategoryNav from '../../../../components/CategoryNav.astro';
 import { categoryLabel, LANGS, useTranslations, type Lang } from '../../../../i18n/ui.ts';
+import { localePath } from '../../../../i18n/paths.ts';
 import { getGarden } from '../../../../lib/garden.ts';
+import { LEGACY_CATEGORIES, SECTIONS } from '../../../../lib/sections.ts';
 
-export async function getStaticPaths() {
-  const { notes } = await getGarden();
-  const categories = [...new Set(notes.map((n) => n.data.category))];
-  return LANGS.flatMap((lang) => categories.map((category) => ({ params: { lang, category } })));
+export function getStaticPaths() {
+  const slugs = [...SECTIONS, ...Object.keys(LEGACY_CATEGORIES)];
+  return LANGS.flatMap((lang) => slugs.map((category) => ({ params: { lang, category } })));
 }
 
 const lang = Astro.params.lang as Lang;
 const category = Astro.params.category!;
 const t = useTranslations(lang);
+const redirectTo = LEGACY_CATEGORIES[category];
 const { notes } = await getGarden();
 const inCategory = notes.filter((n) => n.data.category === category);
-const label = categoryLabel(category, lang);
+const label = categoryLabel(redirectTo ?? category, lang);
+const target = redirectTo ? localePath(lang, `/notes/category/${redirectTo}/`) : '';
 ---
 
-<BaseLayout lang={lang} title={`${label} · ${t('notes.title')}`}>
-  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">{t('notes.inCategory', { category: label })}</h1>
-  <p class="mt-2 text-muted">{t('notes.count', { n: inCategory.length })}</p>
-  <div class="mt-6">
-    <CategoryNav lang={lang} notes={notes} current={category} />
-  </div>
-  <div class="mt-6">
-    <NoteList lang={lang} notes={inCategory} />
-  </div>
-</BaseLayout>
+{
+  redirectTo ? (
+    <BaseLayout lang={lang} title={label} standalone>
+      <meta slot="head" http-equiv="refresh" content={`0; url=${target}`} />
+      <link slot="head" rel="canonical" href={new URL(target, Astro.site)} />
+      <meta slot="head" name="robots" content="noindex" />
+      <p class="text-muted">
+        <a class="link" href={target}>
+          {t('notes.redirect', { section: label })}
+        </a>
+      </p>
+    </BaseLayout>
+  ) : (
+    <BaseLayout lang={lang} title={`${label} · ${t('notes.title')}`}>
+      <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">{t('notes.inCategory', { category: label })}</h1>
+      <p class="mt-2 text-muted">{t('notes.count', { n: inCategory.length })}</p>
+      <div class="mt-6">
+        <CategoryNav lang={lang} notes={notes} current={category} />
+      </div>
+      <div class="mt-6">
+        {inCategory.length ? <NoteList lang={lang} notes={inCategory} /> : <p class="text-muted">{t('notes.sectionEmpty')}</p>}
+      </div>
+    </BaseLayout>
+  )
+}

@@ -1,0 +1,22 @@
+{
+  "artificial-intelligence": { "zh": "人工智能", "en": "Artificial Intelligence", "aliases": ["ai"] },
+  "large-language-models": { "zh": "大语言模型", "en": "Large Language Models", "parent": "artificial-intelligence", "aliases": ["llm", "llms"] },
+  "ai-agent": {
+    "zh": "AI Agent",
+    "en": "AI Agent",
+    "parent": "artificial-intelligence",
+    "aliases": ["agent", "agents", "ai-agents", "llm-agent", "llm-agents", "智能体"]
+  },
+  "generative-ai": { "zh": "生成式 AI", "en": "Generative AI", "parent": "artificial-intelligence", "aliases": ["genai", "aigc"] },
+  "react-paradigm": { "zh": "ReAct", "en": "ReAct", "parent": "ai-agent", "aliases": ["react-agent", "reason-and-act"] },
+  "model-context-protocol": { "zh": "MCP", "en": "MCP", "parent": "ai-agent", "aliases": ["mcp"] },
+  "dmd2": { "zh": "DMD2", "en": "DMD2", "parent": "generative-ai", "aliases": ["distribution-matching-distillation"] },
+
+  "algorithms": { "zh": "算法", "en": "Algorithms", "aliases": ["algorithm", "算法"] },
+  "dynamic-programming": { "zh": "动态规划", "en": "Dynamic Programming", "parent": "algorithms", "aliases": ["dp", "动态规划"] },
+
+  "software-engineering": { "zh": "软件工程", "en": "Software Engineering", "aliases": ["se"] },
+
+  "learning-garden": { "zh": "学习花园", "en": "Learning Garden", "aliases": ["garden"] },
+  "workflow": { "zh": "工作流", "en": "Workflow", "aliases": ["workflows"] }
+}

@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  daysBetween,
   githubCountsByDate,
+  githubSyncedThrough,
   isContentOnlyCommit,
   parseContributionsHtml,
   parseGithubActivity,
   parseGraphqlYears,
+  summarizeGithubActivity,
   type GithubActivity,
 } from '../src/lib/github.ts';
 
@@ -73,6 +76,39 @@ describe('GitHub contributions', () => {
       <tool-tip for="contribution-day-component-1-52" class="sr-only">1,204 contributions on November 16th.</tool-tip>
       <tool-tip for="contribution-day-component-2-52" class="sr-only">1 contribution on November 17th.</tool-tip>`;
     assert.deepEqual(parseContributionsHtml(html), { '2026-11-16': 1204, '2026-11-17': 1 });
+  });
+
+  test('GraphQL years also report GitHub totals and anonymous private counts', () => {
+    const r = parseGraphqlYears(
+      {
+        2026: {
+          restrictedContributionsCount: 2,
+          contributionCalendar: { totalContributions: 5, weeks: [{ contributionDays: [{ date: '2026-03-01', contributionCount: 5 }] }] },
+          commitContributionsByRepository: [],
+        },
+      },
+      'BoltzMamba/learning-garden',
+    );
+    assert.deepEqual(r.yearTotals, { 2026: 5 });
+    assert.deepEqual(r.restricted, { 2026: 2 });
+  });
+
+  test('freshness: synced-through date, and a failed sync is kept as an error, not as zero', () => {
+    const snap = parseGithubActivity({ ...base, range: { from: '2025-01-01', to: '2026-11-10' }, lastError: { at: 'x', message: 'HTTP 401' } })!;
+    assert.equal(githubSyncedThrough(snap), '2026-11-10');
+    assert.equal(snap.lastError?.message, 'HTTP 401');
+    // Older caches without a range fall back to the fetch date in UTC+8.
+    assert.equal(githubSyncedThrough({ ...base, fetchedAt: '2026-11-17T20:00:00Z' }), '2026-11-18');
+    assert.equal(githubSyncedThrough(undefined), undefined);
+    assert.equal(daysBetween('2026-11-10', '2026-11-17'), 7);
+  });
+
+  test('summary checks the per-day sum against GitHub totals', () => {
+    const ok = summarizeGithubActivity({ ...base, yearTotals: { 2026: 11 } });
+    assert.equal(ok.total, 11);
+    assert.equal(ok.nonZeroDays, 3);
+    assert.equal(ok.consistent, true);
+    assert.equal(summarizeGithubActivity({ ...base, yearTotals: { 2026: 12 } }).consistent, false);
   });
 
   test('content-only commits are pure learning records', () => {

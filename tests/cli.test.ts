@@ -25,34 +25,74 @@ describe('garden CLI', () => {
   before(() => {
     root = mkdtempSync(path.join(tmpdir(), 'garden-cli-'));
     mkdirSync(path.join(root, 'src/data'), { recursive: true });
+    writeFileSync(
+      path.join(root, 'src/data/topics.json'),
+      JSON.stringify({
+        'ai-agent': { zh: 'AI Agent', en: 'AI Agent', aliases: ['agent', 'LLM Agent'] },
+        llm: { zh: '大语言模型', en: 'LLM' },
+      }),
+    );
   });
   after(() => rmSync(root, { recursive: true, force: true }));
 
   test('new creates a note with valid frontmatter', () => {
-    const r = garden('new', '--title', 'ReAct Agent Loop', '--category', 'ai-agents', '--tags', 'agent, llm,agent',
+    const r = garden('new', '--title', 'ReAct Agent Loop', '--category', 'knowledge', '--tags', 'agent, llm,LLM Agent',
       '--description', 'How ReAct interleaves reasoning and acting.', '--date', '2026-11-10');
     assert.equal(r.code, 0, r.out);
     const text = readFileSync(path.join(root, 'src/content/notes/react-agent-loop.md'), 'utf8');
     assert.match(text, /^title: "ReAct Agent Loop"$/m);
-    assert.match(text, /^tags: \["agent","llm"\]$/m);
+    assert.match(text, /^category: "knowledge"$/m);
+    // Synonyms collapse to the topic id.
+    assert.match(text, /^tags: \["ai-agent","llm"\]$/m);
+    assert.doesNotMatch(text, /^contentType:/m);
     assert.match(text, /^published: "2026-11-10"$/m);
   });
 
   test('duplicate slugs are rejected without touching the file', () => {
     const file = path.join(root, 'src/content/notes/react-agent-loop.md');
     const before = readFileSync(file, 'utf8');
-    const r = garden('new', '--title', 'ReAct Agent Loop', '--category', 'ai-agents', '--description', 'dup');
+    const r = garden('new', '--title', 'ReAct Agent Loop', '--category', 'knowledge', '--description', 'dup');
     assert.equal(r.code, 1);
     assert.match(r.out, /already exists/);
     assert.equal(readFileSync(file, 'utf8'), before);
   });
 
   test('Chinese-only titles require an explicit slug', () => {
-    const r = garden('new', '--title', '动态规划入门', '--category', 'algorithms', '--description', 'd');
+    const r = garden('new', '--title', '动态规划入门', '--category', 'practice', '--description', 'd');
     assert.equal(r.code, 1);
     assert.match(r.out, /--slug/);
     const ok = garden('new', '--title', '动态规划入门', '--slug', 'dp-intro', '--category', 'algorithms', '--description', 'd');
     assert.equal(ok.code, 0, ok.out);
+    assert.match(ok.out, /legacy category/);
+    assert.match(readFileSync(path.join(root, 'src/content/notes/dp-intro.md'), 'utf8'), /^category: "practice"$/m);
+  });
+
+  test('new validates sections, tags, series and related', () => {
+    const base = ['new', '--description', 'd', '--date', '2026-11-10'];
+    assert.match(garden(...base, '--title', 'X1', '--category', 'cooking').out, /section must be one of/);
+    assert.match(garden(...base, '--title', 'X2', '--category', 'knowledge', '--tags', 'quantum').out, /"quantum" is not in/);
+    assert.match(garden(...base, '--title', 'X3', '--category', 'knowledge', '--series', 'dp-intro').out, /not an existing overview/);
+    assert.match(garden(...base, '--title', 'X4', '--category', 'knowledge', '--related', 'ghost').out, /unknown note "ghost"/);
+    assert.match(garden(...base, '--title', 'X5', '--category', 'knowledge', '--type', 'overview', '--series', 'x').out, /overview cannot belong/);
+  });
+
+  test('new creates a series overview and a member note with order and related', () => {
+    const o = garden('new', '--title', 'Agents', '--category', 'knowledge', '--type', 'overview', '--description', 'Series', '--date', '2026-11-10');
+    assert.equal(o.code, 0, o.out);
+    assert.match(readFileSync(path.join(root, 'src/content/notes/agents.md'), 'utf8'), /^contentType: "overview"$/m);
+    const m = garden('new', '--title', 'Tool use', '--category', 'knowledge', '--series', 'agents', '--order', '10',
+      '--related', 'react-agent-loop', '--description', 'd', '--date', '2026-11-10');
+    assert.equal(m.code, 0, m.out);
+    const text = readFileSync(path.join(root, 'src/content/notes/tool-use.md'), 'utf8');
+    assert.match(text, /^series: "agents"$/m);
+    assert.match(text, /^order: 10$/m);
+    assert.match(text, /^related: \["react-agent-loop"\]$/m);
+  });
+
+  test('topics lists the vocabulary', () => {
+    const r = garden('topics');
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /ai-agent {2}AI Agent \/ AI Agent {2}\(aliases: agent, LLM Agent\)/);
   });
 
   test('a repeated same-day review updates the existing record', () => {

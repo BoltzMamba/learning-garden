@@ -1,6 +1,6 @@
 {
-  "ai-agents": { "zh": "AI Agent", "en": "AI Agents" },
-  "algorithms": { "zh": "算法", "en": "Algorithms" },
-  "software-engineering": { "zh": "软件工程", "en": "Software Engineering" },
-  "meta": { "zh": "关于花园", "en": "About the garden" }
+  "guide": { "zh": "花园指南", "en": "Garden Guide" },
+  "practice": { "zh": "刷题练习", "en": "Practice" },
+  "knowledge": { "zh": "基础知识", "en": "Knowledge" },
+  "projects": { "zh": "项目档案", "en": "Projects" }
 }

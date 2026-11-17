@@ -1,7 +1,8 @@
 /**
  * Learning Garden CLI — offline, deterministic, no API keys.
  *
- *   npm run garden -- new       create a note
+ *   npm run garden -- new       create a note or series overview
+ *   npm run garden -- topics    list the topic vocabulary (valid tags)
  *   npm run garden -- review    record a review (one per note per day)
  *   npm run garden -- revise    record a meaningful revision
  *   npm run garden -- question  create a question
@@ -29,6 +30,8 @@ import {
   type RevisionRecord,
 } from '../src/lib/records.ts';
 import { isValidSlug, slugify } from '../src/lib/slug.ts';
+import { SECTIONS, toSection } from '../src/lib/sections.ts';
+import { parseVocabulary, resolveTag, type Vocabulary } from '../src/lib/topics.ts';
 
 const ROOT = process.env.GARDEN_ROOT
   ? path.resolve(process.env.GARDEN_ROOT)
@@ -37,7 +40,7 @@ const NOTES_DIR = path.join(ROOT, 'src/content/notes');
 const QUESTIONS_DIR = path.join(ROOT, 'src/content/questions');
 const REVIEWS_FILE = path.join(ROOT, 'src/data/reviews.json');
 const REVISIONS_FILE = path.join(ROOT, 'src/data/revisions.json');
-const CATEGORIES_FILE = path.join(ROOT, 'src/data/categories.json');
+const TOPICS_FILE = path.join(ROOT, 'src/data/topics.json');
 
 class UserError extends Error {}
 
@@ -79,6 +82,7 @@ interface NoteSummary {
   title: string;
   published: string;
   category: string;
+  contentType: string;
 }
 
 function frontmatterValue(frontmatter: string, key: string): string | undefined {
@@ -108,6 +112,7 @@ async function loadNotes(): Promise<NoteSummary[]> {
       title: frontmatterValue(fm, 'title') ?? file,
       published: frontmatterValue(fm, 'published') ?? '',
       category: frontmatterValue(fm, 'category') ?? '',
+      contentType: frontmatterValue(fm, 'contentType') ?? 'note',
     });
   }
   return notes.sort((a, b) => b.published.localeCompare(a.published) || a.id.localeCompare(b.id));
@@ -187,6 +192,15 @@ async function selectNote(prompter: Prompter, flagValue: string | undefined): Pr
   return find(value)!;
 }
 
+async function loadVocabulary(): Promise<Vocabulary> {
+  if (!existsSync(TOPICS_FILE)) throw new UserError(`${rel(TOPICS_FILE)} not found; tags are checked against it.`);
+  try {
+    return parseVocabulary(JSON.parse(await readFile(TOPICS_FILE, 'utf8')), rel(TOPICS_FILE));
+  } catch (err) {
+    throw new UserError((err as Error).message);
+  }
+}
+
 // ------------------------------------------------------------------ commands
 
 async function cmdNew(flags: Flags, prompter: Prompter) {
@@ -206,24 +220,62 @@ async function cmdNew(flags: Flags, prompter: Prompter) {
     { flag: 'slug', default: suggested || undefined },
   );
 
-  const categories = new Set<string>();
-  if (existsSync(CATEGORIES_FILE)) Object.keys(JSON.parse(await readFile(CATEGORIES_FILE, 'utf8'))).forEach((c) => categories.add(c));
-  (await loadNotes()).forEach((n) => n.category && categories.add(n.category));
-  if (flags.category === undefined && prompter.interactive && categories.size) {
-    console.log(`Existing categories: ${[...categories].sort().join(', ')}`);
-  }
-  const category = await prompter.askValid(
-    'Category (slug)',
+  if (flags.category === undefined && prompter.interactive) console.log(`Sections: ${SECTIONS.join(', ')}`);
+  const categoryRaw = await prompter.askValid(
+    'Section',
     flags.category,
-    (v) => (isValidSlug(v) ? null : 'category must be a slug, e.g. ai-agents'),
+    (v) => (toSection(v) ? null : `section must be one of ${SECTIONS.join(', ')}`),
     { flag: 'category' },
   );
-  if (!categories.has(category)) {
-    console.log(`  ℹ New category "${category}". Optionally add display names in ${rel(CATEGORIES_FILE)}.`);
+  const category = toSection(categoryRaw)!;
+  if (category !== categoryRaw) console.log(`  ℹ "${categoryRaw}" is a legacy category; using section "${category}".`);
+
+  const contentType = await prompter.askValid(
+    'Type (note | overview)',
+    flags.type,
+    (v) => (v === 'note' || v === 'overview' ? null : 'type must be "note" or "overview"'),
+    { flag: 'type', default: 'note' },
+  );
+  let series = '';
+  let order = '';
+  if (contentType === 'note') {
+    const overviews = (await loadNotes()).filter((n) => n.contentType === 'overview');
+    if (flags.series === undefined && prompter.interactive && overviews.length) {
+      console.log(`Series (overviews): ${overviews.map((o) => o.id).join(', ')}`);
+    }
+    series = await prompter.askValid(
+      'Series overview id (optional)',
+      flags.series,
+      (v) => (!v || overviews.some((o) => o.id === v) ? null : `"${v}" is not an existing overview (run: npm run garden -- list)`),
+      { flag: 'series', allowEmpty: true },
+    );
+    if (series) {
+      order = await prompter.askValid(
+        'Order within the series (optional, e.g. 10)',
+        flags.order,
+        (v) => (!v || Number.isFinite(Number(v)) ? null : 'order must be a number'),
+        { flag: 'order', allowEmpty: true },
+      );
+    }
+  } else if (flags.series) {
+    throw new UserError('--series: an overview cannot belong to another series');
   }
 
   const tagsRaw = flags.tags ?? (await prompter.ask('Tags (comma-separated, optional)', { flag: 'tags', allowEmpty: true }));
-  const tags = [...new Set(tagsRaw.split(/[,，]/).map((t) => t.trim()).filter(Boolean))];
+  const vocab = await loadVocabulary();
+  const tags: string[] = [];
+  for (const raw of tagsRaw.split(/[,，]/).map((t) => t.trim()).filter(Boolean)) {
+    const id = resolveTag(vocab, raw);
+    if (!id) throw new UserError(`--tags: "${raw}" is not in ${rel(TOPICS_FILE)} (run: npm run garden -- topics, or add it there)`);
+    if (!tags.includes(id)) tags.push(id);
+  }
+  const notesNow = await loadNotes();
+  const relatedRaw = flags.related ?? (await prompter.ask('Related note ids (comma-separated, optional)', { flag: 'related', allowEmpty: true }));
+  const related = [...new Set(relatedRaw.split(/[,，]/).map((t) => t.trim()).filter(Boolean))];
+  for (const r of related) {
+    if (r === slug) throw new UserError('--related: a note cannot be related to itself');
+    if (!notesNow.some((n) => n.id === r)) throw new UserError(`--related: unknown note "${r}"`);
+  }
   const description = await prompter.askValid('One-line description', flags.description, required('description', 300), {
     flag: 'description',
   });
@@ -240,11 +292,14 @@ async function cmdNew(flags: Flags, prompter: Prompter) {
     `category: ${yamlString(category)}`,
     `tags: ${JSON.stringify(tags)}`,
     `published: ${yamlString(published)}`,
+    ...(contentType === 'overview' ? ['contentType: "overview"'] : []),
+    ...(series ? [`series: ${yamlString(series)}`] : []),
+    ...(order ? [`order: ${Number(order)}`] : []),
+    ...(related.length ? [`related: ${JSON.stringify(related)}`] : []),
     '---',
     '',
-    '## 要点',
-    '',
-    '',
+    // An overview's contents list is generated from `series`; its body is an optional introduction.
+    ...(contentType === 'overview' ? ['<!-- 专题综述（可留空）。目录会根据 series 自动生成。 -->', ''] : ['## 要点', '', '']),
   ].join('\n');
   await mkdir(NOTES_DIR, { recursive: true });
   try {
@@ -253,7 +308,7 @@ async function cmdNew(flags: Flags, prompter: Prompter) {
     if ((err as NodeJS.ErrnoException).code === 'EEXIST') throw new UserError(`${rel(file)} already exists`);
     throw err;
   }
-  console.log(`✓ Created ${rel(file)} (published ${published})`);
+  console.log(`✓ Created ${rel(file)} (${contentType}, section ${category}, published ${published})`);
   console.log('  Write the body, then commit and push to publish.');
 }
 
@@ -373,6 +428,18 @@ async function cmdQuestion(flags: Flags, prompter: Prompter) {
   console.log(`✓ Created ${rel(file)}${isPublic ? '' : ' (hidden from the site — but still public in the repository)'}`);
 }
 
+async function cmdTopics() {
+  const vocab = await loadVocabulary();
+  const visit = (parent: string | undefined, depth: number) => {
+    for (const t of [...vocab.topics.values()].filter((x) => x.parent === parent).sort((a, b) => a.id.localeCompare(b.id))) {
+      const aliases = t.aliases.length ? `  (aliases: ${t.aliases.join(', ')})` : '';
+      console.log(`${'  '.repeat(depth)}${t.id}  ${t.zh} / ${t.en}${aliases}`);
+      visit(t.id, depth + 1);
+    }
+  };
+  visit(undefined, 0);
+}
+
 async function cmdList() {
   const notes = await loadNotes();
   const reviews = validateReviewRecords(await readJsonArray(REVIEWS_FILE), rel(REVIEWS_FILE));
@@ -389,6 +456,8 @@ Usage: npm run garden -- <command> [flags]
 
 Commands
   new        Create a note            --title --slug --category --tags --description --date
+                                      --type note|overview --series --order --related
+  topics     List the topic vocabulary (valid --tags values)
   review     Record a review          --note --date --mastery --reflection
   revise     Record a revision        --note --date --summary
   question   Create a question        --title --slug --note --description --public
@@ -418,6 +487,10 @@ const options = {
   reflection: { type: 'string' },
   summary: { type: 'string' },
   public: { type: 'string' },
+  type: { type: 'string' },
+  series: { type: 'string' },
+  order: { type: 'string' },
+  related: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const;
 type Flags = Partial<Record<Exclude<keyof typeof options, 'help'>, string>>;
@@ -446,6 +519,8 @@ async function main() {
         return await cmdQuestion(flags, prompter);
       case 'list':
         return await cmdList();
+      case 'topics':
+        return await cmdTopics();
       default:
         throw new UserError(`Unknown command "${command}".\n\n${HELP}`);
     }

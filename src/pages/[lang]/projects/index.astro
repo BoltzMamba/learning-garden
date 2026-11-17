@@ -1,0 +1,24 @@
+---
+/** Projects: its own entry point, but the same notes, tags, relations and graph. */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import NoteList from '../../../components/NoteList.astro';
+import { LANGS, useTranslations, type Lang } from '../../../i18n/ui.ts';
+import { getGarden } from '../../../lib/garden.ts';
+
+export function getStaticPaths() {
+  return LANGS.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Lang;
+const t = useTranslations(lang);
+const { notes } = await getGarden();
+const projects = notes.filter((n) => n.data.category === 'projects');
+---
+
+<BaseLayout lang={lang} title={t('projects.title')}>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">{t('projects.title')}</h1>
+  <p class="mt-2 text-muted">{t('projects.intro')}</p>
+  <div class="mt-6">
+    {projects.length ? <NoteList lang={lang} notes={projects} /> : <p class="text-muted">{t('projects.empty')}</p>}
+  </div>
+</BaseLayout>

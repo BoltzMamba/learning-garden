@@ -1,7 +1,7 @@
 ---
 title: "这个学习花园是如何运作的"
 description: "Learning Garden 的设计说明：笔记、复习、修订与问答如何共同构成一份会生长的知识记录。"
-category: "meta"
+category: "guide"
 tags: ["learning-garden", "workflow"]
 published: "2026-11-16"
 ---

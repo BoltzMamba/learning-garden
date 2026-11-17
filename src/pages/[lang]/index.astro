@@ -7,6 +7,7 @@ import GraphView from '../../components/GraphView.astro';
 import { LANGS, useTranslations, type Lang } from '../../i18n/ui.ts';
 import { localePath } from '../../i18n/paths.ts';
 import { getGarden } from '../../lib/garden.ts';
+import { previewGraph } from '../../lib/graph.ts';
 import { todayInTimeZone } from '../../lib/dates.ts';
 
 export function getStaticPaths() {
@@ -15,8 +16,10 @@ export function getStaticPaths() {
 
 const lang = Astro.params.lang as Lang;
 const t = useTranslations(lang);
-const { notes, events, github, graph } = await getGarden();
+const { notes, events, github, graph, githubThrough, githubActivity } = await getGarden();
 const today = todayInTimeZone();
+// Article Graph, connected nodes only, capped so the card stays quiet.
+const preview = previewGraph(graph, 'article', 24);
 ---
 
 <BaseLayout lang={lang} wide immersive>
@@ -25,7 +28,14 @@ const today = todayInTimeZone();
   <section id="log" class="scroll-mt-20 mb-12" aria-labelledby="log-heading">
     <h2 id="log-heading" class="section-title">{t('home.log')}</h2>
     <p class="mt-2 mb-5 max-w-[46rem] text-muted leading-relaxed">{t('home.intro')}</p>
-    <ActivityCalendar lang={lang} events={events} github={github} today={today} />
+    <ActivityCalendar
+      lang={lang}
+      events={events}
+      github={github}
+      today={today}
+      githubThrough={githubThrough}
+      githubError={!!githubActivity?.lastError}
+    />
   </section>
 
   <section class="mb-12" aria-labelledby="graph-heading">
@@ -33,7 +43,13 @@ const today = todayInTimeZone();
       <h2 id="graph-heading" class="section-title">{t('graph.preview')}</h2>
       <a href={localePath(lang, '/graph/')} class="text-sm link">{t('graph.open')}</a>
     </div>
-    <GraphView lang={lang} graph={graph} variant="preview" />
+    {
+      preview.nodes.length ? (
+        <GraphView lang={lang} graph={preview} variant="preview" mode="article" />
+      ) : (
+        <p class="text-sm text-muted border border-dashed border-line rounded-lg p-4">{t('graph.empty')}</p>
+      )
+    }
   </section>
 
   <section aria-labelledby="recent-heading">

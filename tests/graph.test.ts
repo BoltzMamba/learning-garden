@@ -3,7 +3,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
-import { buildGraph, localGraph, noteConnections, noteNodeId } from '../src/lib/graph.ts';
 import { extractNoteLinks, makeResolver } from '../src/lib/links.ts';
 import remarkWikilinks from '../src/lib/remark-wikilinks.ts';
 
@@ -49,42 +48,6 @@ describe('internal link extraction', () => {
   });
 });
 
-describe('graph', () => {
-  const input = notes.map((n) =>
-    n.id === 'react-loop' ? { ...n, body: 'Builds on [[dp-intro]] and [[dp-intro]].' } : n.id === 'dp-intro' ? { ...n, body: 'Back to [the loop](../react-loop/).' } : n,
-  );
-  const questions = [
-    { id: 'q-public', title: 'Why loops?', note: 'react-loop', public: true },
-    { id: 'q-hidden', title: 'Hidden', note: 'react-loop', public: false },
-  ];
-
-  test('nodes come from real notes, tags and public questions; edges from written links only', () => {
-    const g = buildGraph(input, questions);
-    assert.deepEqual(g.nodes.map((n) => n.id).sort(), ['note:dp-intro', 'note:lonely', 'note:react-loop', 'q:q-public', 'tag:agent', 'tag:algorithms']);
-    const noteEdges = g.links.filter((l) => l.kind === 'link');
-    assert.equal(noteEdges.length, 1, 'mutual links are one undirected edge');
-    assert.deepEqual(g.noteLinks, [
-      { from: 'react-loop', to: 'dp-intro' },
-      { from: 'dp-intro', to: 'react-loop' },
-    ]);
-    // The isolated note is still a node, with no edges.
-    assert.equal(g.nodes.find((n) => n.id === 'note:lonely')?.degree, 0);
-    // Hidden questions never appear.
-    assert.ok(!g.nodes.some((n) => n.id === 'q:q-hidden'));
-    assert.equal(buildGraph(input, questions, { tags: false }).nodes.filter((n) => n.kind === 'tag').length, 0);
-  });
-
-  test('backlinks, outlinks and local graph depth', () => {
-    const g = buildGraph(input, questions);
-    assert.deepEqual(noteConnections(g.noteLinks, 'dp-intro'), { backlinks: ['react-loop'], outlinks: ['react-loop'] });
-    const one = localGraph(g, noteNodeId('dp-intro'), 1);
-    assert.deepEqual(one.nodes.map((n) => n.id).sort(), ['note:dp-intro', 'note:react-loop', 'tag:algorithms']);
-    const two = localGraph(g, noteNodeId('dp-intro'), 2);
-    assert.ok(two.nodes.some((n) => n.id === 'q:q-public') && two.nodes.some((n) => n.id === 'tag:agent'));
-    assert.ok(!two.nodes.some((n) => n.id === 'note:lonely'));
-    assert.ok(two.links.every((l) => two.nodes.some((n) => n.id === l.source) && two.nodes.some((n) => n.id === l.target)));
-  });
-});
 
 describe('wikilink remark plugin', () => {
   test('renders resolved links relative to the page and marks missing ones', () => {

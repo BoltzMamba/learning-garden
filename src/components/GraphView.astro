@@ -1,104 +1,192 @@
 ---
 /**
- * Knowledge graph (Quartz-style). Variants:
- *   preview — homepage card, ctrl/⌘ + wheel to zoom
- *   full    — the /graph/ page: wheel zoom, tag toggle, list view
- *   local   — bottom of a note: the note's neighbourhood
+ * Knowledge graph view. Variants:
+ *   full    — the /graph/ page: Article/Topic modes, search, zoom, list view.
+ *             Receives the whole unified graph; modes are filtered client-side.
+ *   preview — homepage card (already reduced with previewGraph()).
+ *   local   — a note's neighbourhood (already reduced with localGraph()).
+ *
+ * The renderer (d3-force + canvas) is loaded only when the view scrolls near
+ * the viewport. Without JS, the full page still has the list view.
  */
-import type { GraphData } from '../lib/graph.ts';
-import { useTranslations, type Lang } from '../i18n/ui.ts';
+import { filterMode, GRAPH_MODES, localizeGraph, MODE_EDGES, type EdgeKind, type GraphData, type GraphMode } from '../lib/graph-modes.ts';
+import { useTranslations, type Lang, type UiKey } from '../i18n/ui.ts';
 import { localePath } from '../i18n/paths.ts';
 
 interface Props {
   lang: Lang;
   graph: GraphData;
   variant: 'preview' | 'full' | 'local';
+  /** Initial mode (full) or the mode the data was filtered with. */
+  mode?: GraphMode;
   /** Highlighted node id (local graph). */
   center?: string;
 }
 
-const { lang, graph, variant, center } = Astro.props;
+const { lang, graph, variant, mode = 'article', center } = Astro.props;
 const t = useTranslations(lang);
+const localized = localizeGraph(graph, lang, localePath);
+const payload = {
+  nodes: localized.nodes.map(({ id, kind, contentType, label, href, degree }) => ({ id, kind, contentType, label, href, degree })),
+  edges: localized.edges,
+  center,
+};
+const initial = variant === 'full' ? filterMode(graph, mode) : graph;
 
-const nodes = graph.nodes.map((n) => ({ ...n, href: localePath(lang, n.path) }));
-const payload = { nodes, links: graph.links, center };
-const counts = { notes: 0, tags: 0, questions: 0 };
-for (const n of graph.nodes) counts[n.kind === 'note' ? 'notes' : n.kind === 'tag' ? 'tags' : 'questions']++;
-
-// For the list view: each note's connections.
-const labelOf = new Map(nodes.map((n) => [n.id, n]));
-const connections = new Map<string, Set<string>>();
-for (const l of graph.links) {
-  (connections.get(l.source) ?? connections.set(l.source, new Set()).get(l.source)!).add(l.target);
-  (connections.get(l.target) ?? connections.set(l.target, new Set()).get(l.target)!).add(l.source);
+// List view (full page): every node of each mode with its relations, grouped.
+const byId = new Map(localized.nodes.map((n) => [n.id, n]));
+const kindOrder = { article: 0, topic: 1, question: 2 } as const;
+function listFor(m: GraphMode) {
+  const view = filterMode(graph, m);
+  return view.nodes
+    .map((n) => byId.get(n.id)!)
+    .sort(
+      (a, b) =>
+        kindOrder[a.kind] - kindOrder[b.kind] ||
+        Number(b.contentType === 'overview') - Number(a.contentType === 'overview') ||
+        a.label.localeCompare(b.label, lang),
+    )
+    .map((n) => {
+      const groups: { key: UiKey; items: typeof localized.nodes }[] = [];
+      for (const kind of MODE_EDGES[m]) {
+        for (const dir of ['out', 'in'] as const) {
+          const items = view.edges
+            .filter((e) => e.kind === kind && (dir === 'out' ? e.source === n.id : e.target === n.id))
+            .map((e) => byId.get(dir === 'out' ? e.target : e.source)!);
+          if (!items.length) continue;
+          const key = `graph.rel.${kind}.${dir}` as UiKey;
+          const same = groups.find((g) => g.key === key); // related_to is undirected: one group
+          if (same) same.items.push(...items);
+          else groups.push({ key, items });
+        }
+      }
+      return { node: n, groups };
+    });
 }
+const lists = variant === 'full' ? GRAPH_MODES.map((m) => ({ mode: m, items: listFor(m) })) : [];
+const edgeKinds = (m: GraphMode): EdgeKind[] => [...MODE_EDGES[m]];
+const hasOverview = graph.nodes.some((n) => n.contentType === 'overview');
+const hasQuestion = graph.nodes.some((n) => n.kind === 'question');
 ---
 
-<figure class:list={['graph-view', `graph-${variant}`]} data-graph={variant}>
-  <canvas
-    class="graph-canvas"
-    role="img"
-    aria-label={t('graph.canvasLabel', { nodes: graph.nodes.length, links: graph.links.length })}
-  ></canvas>
-
-  <figcaption class="graph-bar">
-    <span class="legend" aria-hidden="true">
-      <span><i class="dot note"></i>{t('graph.legend.note')}</span>
-      {counts.tags > 0 && <span><i class="dot tag"></i>{t('graph.legend.tag')}</span>}
-      {counts.questions > 0 && <span><i class="dot question"></i>{t('graph.legend.question')}</span>}
-    </span>
-    <span class="hint">
-      <span class="hint-mouse">{t(variant === 'full' ? 'graph.hint' : 'graph.hintEmbedded')}</span>
-      <span class="hint-touch">{t('graph.hintTouch')}</span>
-    </span>
-    {
-      variant === 'full' && (
-        <span class="controls">
-          {counts.tags > 0 && (
-            <label class="chip toggle">
-              <input type="checkbox" data-graph-tags checked />
-              {t('graph.showTags')}
-            </label>
-          )}
+<figure class:list={['graph-view', `graph-${variant}`]} data-graph={variant} data-mode={mode}>
+  {
+    variant === 'full' && (
+      <div class="graph-toolbar">
+        <div class="modes" role="group" aria-label={t('graph.mode')}>
+          {GRAPH_MODES.map((m) => (
+            <button type="button" class="chip" data-graph-mode={m} aria-pressed={m === mode ? 'true' : 'false'}>
+              {t(`graph.mode.${m}`)}
+            </button>
+          ))}
+        </div>
+        <form class="search" data-graph-search role="search">
+          <label class="sr-only" for="graph-search-input">
+            {t('graph.search')}
+          </label>
+          <input
+            id="graph-search-input"
+            type="search"
+            list="graph-search-options"
+            placeholder={t('graph.searchPlaceholder')}
+            autocomplete="off"
+            data-none={t('graph.searchNone', { q: '__Q__' })}
+          />
+          <datalist id="graph-search-options" />
+          <button type="submit" class="chip">
+            {t('graph.search')}
+          </button>
+        </form>
+        <span class="zoom">
+          <button type="button" class="chip" data-graph-zoom="in" aria-label={t('graph.zoomIn')}>
+            +
+          </button>
+          <button type="button" class="chip" data-graph-zoom="out" aria-label={t('graph.zoomOut')}>
+            −
+          </button>
           <button type="button" class="chip" data-graph-reset>
             {t('graph.reset')}
           </button>
         </span>
-      )
-    }
+      </div>
+    )
+  }
+  {
+    variant === 'full' && (
+      <p class="mode-hint">
+        <span data-for-mode="article">{t('graph.mode.articleHint')}</span>
+        <span data-for-mode="topic">{t('graph.mode.topicHint')}</span>
+        <span class="status" aria-live="polite" data-graph-status />
+      </p>
+    )
+  }
+
+  <div class="stage">
+    <canvas
+      class="graph-canvas"
+      role="img"
+      aria-label={t('graph.canvasLabel', { nodes: initial.nodes.length, links: initial.edges.length })}
+      data-label-template={t('graph.canvasLabel', { nodes: '__N__', links: '__L__' })}></canvas>
+    {variant === 'full' && <p class="empty-overlay" data-graph-empty hidden>{t('graph.empty')}</p>}
+  </div>
+
+  <figcaption class="graph-bar">
+    <span class="legend" aria-hidden="true">
+      <span data-for-mode="article topic"><i class="dot article"></i>{t('graph.legend.article')}</span>
+      {hasOverview && <span data-for-mode="article topic"><i class="dot overview"></i>{t('graph.legend.overview')}</span>}
+      {variant === 'full' && <span data-for-mode="topic"><i class="dot topic"></i>{t('graph.legend.topic')}</span>}
+      {hasQuestion && <span data-for-mode="article"><i class="dot question"></i>{t('graph.legend.question')}</span>}
+      {
+        variant === 'full' &&
+          GRAPH_MODES.flatMap((m) =>
+            edgeKinds(m).map((k) => (
+              <span data-for-mode={m}>
+                <i class:list={['edge', k]} />
+                {t(`graph.edge.${k}` as UiKey)}
+              </span>
+            )),
+          )
+      }
+    </span>
+    <span class="hint">
+      {variant === 'full' && <span class="count" data-graph-count data-template={t('graph.count', { nodes: '__N__', links: '__L__' })}>{t('graph.count', { nodes: initial.nodes.length, links: initial.edges.length })}</span>}
+      <span class="hint-mouse">{t(variant === 'full' ? 'graph.hint' : 'graph.hintEmbedded')}</span>
+      <span class="hint-touch">{t('graph.hintTouch')}</span>
+    </span>
   </figcaption>
 
   {
     variant === 'full' && (
       <details class="graph-list">
         <summary>{t('graph.list')}</summary>
-        <ul>
-          {nodes
-            .filter((n) => n.kind === 'note')
-            .map((n) => {
-              const linked = [...(connections.get(n.id) ?? [])].map((id) => labelOf.get(id)!).filter(Boolean);
-              return (
-                <li>
-                  <a class="link" href={n.href}>
-                    {n.label}
-                  </a>
-                  {linked.length ? (
-                    <span class="text-muted">
-                      {' — '}
-                      {linked.map((m, i) => (
+        <p class="note">{t('graph.isolatedNote')}</p>
+        {lists.map(({ mode: m, items }) => (
+          <ul data-for-mode={m}>
+            {items.map(({ node, groups }) => (
+              <li>
+                <a class="link" href={node.href}>
+                  {node.kind === 'topic' ? `#${node.label}` : node.label}
+                </a>
+                {node.contentType === 'overview' && <span class="chip ml-1">{t('series.badge')}</span>}
+                {groups.length ? (
+                  groups.map((g) => (
+                    <span class="rel">
+                      <span class="rel-kind">{t(g.key)}:</span>{' '}
+                      {g.items.map((m2, i) => (
                         <>
                           {i > 0 && ', '}
-                          <a href={m.href}>{m.label}</a>
+                          <a href={m2.href}>{m2.kind === 'topic' ? `#${m2.label}` : m2.label}</a>
                         </>
                       ))}
                     </span>
-                  ) : (
-                    <span class="text-muted"> — {t('graph.isolated')}</span>
-                  )}
-                </li>
-              );
-            })}
-        </ul>
+                  ))
+                ) : (
+                  <span class="rel text-muted">{t('graph.isolated')}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        ))}
       </details>
     )
   }
@@ -114,6 +202,9 @@ for (const l of graph.links) {
     background: var(--bg);
     overflow: hidden;
   }
+  .stage {
+    position: relative;
+  }
   .graph-canvas {
     display: block;
     width: 100%;
@@ -122,19 +213,84 @@ for (const l of graph.links) {
     touch-action: pan-y;
   }
   .graph-full .graph-canvas {
-    height: max(420px, calc(100svh - 300px));
+    height: max(420px, calc(100svh - 340px));
     touch-action: none;
   }
+  .graph-preview .graph-canvas {
+    height: 260px;
+  }
   .graph-local .graph-canvas {
-    height: 240px;
+    height: 220px;
   }
   @media (max-width: 640px) {
     .graph-preview .graph-canvas {
-      height: 240px;
+      height: 200px;
+    }
+    .graph-local .graph-canvas {
+      height: 180px;
     }
     .graph-full .graph-canvas {
-      height: max(360px, calc(100svh - 320px));
+      height: max(360px, calc(100svh - 360px));
     }
+  }
+  .empty-overlay {
+    position: absolute;
+    inset: auto 12px 12px 12px;
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+    text-align: center;
+    pointer-events: none;
+  }
+  .graph-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 8px 12px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .modes,
+  .zoom {
+    display: flex;
+    gap: 6px;
+  }
+  .modes .chip,
+  .zoom .chip,
+  .search .chip {
+    cursor: pointer;
+    background: transparent;
+  }
+  .search {
+    display: flex;
+    gap: 6px;
+    flex: 1 1 14rem;
+    min-width: 0;
+  }
+  .search input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .zoom {
+    margin-left: auto;
+  }
+  .mode-hint {
+    margin: 0;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    border-bottom: 1px dashed var(--border);
+  }
+  .status:not(:empty) {
+    margin-left: 0.75rem;
+    color: var(--accent);
   }
   .graph-bar {
     display: flex;
@@ -149,12 +305,18 @@ for (const l of graph.links) {
   }
   .legend {
     display: flex;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 4px 12px;
   }
   .legend span {
     display: inline-flex;
     align-items: center;
     gap: 5px;
+  }
+  /* Show only the legend/list/hint entries of the active mode. */
+  [data-graph='full'][data-mode='article'] [data-for-mode]:not([data-for-mode~='article']),
+  [data-graph='full'][data-mode='topic'] [data-for-mode]:not([data-for-mode~='topic']) {
+    display: none;
   }
   .dot {
     display: inline-block;
@@ -163,9 +325,16 @@ for (const l of graph.links) {
     border-radius: 999px;
     background: var(--text-muted);
   }
-  .dot.tag {
+  .dot.overview {
+    width: 10px;
+    height: 10px;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .dot.topic {
     background: transparent;
     border: 1.2px solid var(--text-muted);
+    opacity: 0.8;
   }
   .dot.question {
     width: 7px;
@@ -175,8 +344,32 @@ for (const l of graph.links) {
     border: 1.2px solid var(--text-muted);
     transform: rotate(45deg);
   }
+  .edge {
+    display: inline-block;
+    width: 16px;
+    border-top: 1.2px solid color-mix(in srgb, var(--text-muted) 55%, transparent);
+  }
+  .edge.related_to {
+    border-top-style: dashed;
+  }
+  .edge.belongs_to {
+    border-top: 1.2px dotted var(--border);
+    border-top-color: color-mix(in srgb, var(--text-muted) 45%, transparent);
+  }
+  .edge.asks_about {
+    border-top-style: dotted;
+  }
+  .edge.tagged_with,
+  .edge.parent_of {
+    border-top-color: var(--border);
+  }
+  .edge.parent_of {
+    border-top-width: 2px;
+  }
   .hint {
     margin-left: auto;
+    display: inline-flex;
+    gap: 12px;
   }
   .hint-touch {
     display: none;
@@ -189,17 +382,6 @@ for (const l of graph.links) {
       display: inline;
     }
   }
-  .controls {
-    display: flex;
-    gap: 6px;
-  }
-  .toggle {
-    cursor: pointer;
-  }
-  .toggle input {
-    accent-color: var(--accent);
-    margin: 0;
-  }
   .graph-list {
     border-top: 1px dashed var(--border);
     padding: 8px 12px 12px;
@@ -211,10 +393,25 @@ for (const l of graph.links) {
     font-size: 12px;
     color: var(--text-muted);
   }
+  .graph-list .note {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
   .graph-list ul {
     margin-top: 8px;
     display: grid;
-    gap: 4px;
+    gap: 6px;
+  }
+  .rel {
+    display: block;
+    padding-left: 1rem;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .rel-kind {
+    font-family: var(--font-mono);
+    font-size: 11px;
   }
   .graph-list a:not(.link) {
     color: inherit;
@@ -224,35 +421,114 @@ for (const l of graph.links) {
 </style>
 
 <script>
-  import { GraphView, type GraphPayload } from '../scripts/graph-view.ts';
+  import { filterMode, type GraphData, type GraphMode } from '../lib/graph-modes.ts';
+  import type { GraphPayload, GraphView } from '../scripts/graph-view.ts';
 
   const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const views: GraphView[] = [];
+  let observer: IntersectionObserver | undefined;
+  let themeObserver: MutationObserver | undefined;
 
-  for (const root of document.querySelectorAll<HTMLElement>('[data-graph]')) {
-    const payload: GraphPayload = JSON.parse(root.querySelector('[data-graph-payload]')!.textContent!);
+  async function init(root: HTMLElement) {
+    const full: GraphPayload = JSON.parse(root.querySelector('[data-graph-payload]')!.textContent!);
     const variant = root.dataset.graph;
-    const view = new GraphView(root.querySelector('canvas')!, payload, {
+    const canvas = root.querySelector('canvas')!;
+    const { GraphView } = await import('../scripts/graph-view.ts');
+
+    const forMode = (m: GraphMode): GraphPayload => {
+      if (variant !== 'full') return full;
+      const view = filterMode(full as unknown as GraphData, m);
+      return { ...(view as unknown as GraphPayload), center: full.center };
+    };
+
+    let mode = (root.dataset.mode as GraphMode) ?? 'article';
+    const requested = new URL(location.href).searchParams.get('mode');
+    if (variant === 'full' && (requested === 'article' || requested === 'topic')) mode = requested;
+
+    const view = new GraphView(canvas, forMode(mode), {
       wheelZoom: variant === 'full',
-      labels: variant !== 'preview',
+      labels: true,
       reducedMotion: motion.matches,
     });
     views.push(view);
-    root.querySelector<HTMLInputElement>('[data-graph-tags]')?.addEventListener('change', (e) => {
-      view.setShowTags((e.target as HTMLInputElement).checked);
+    if (variant !== 'full') return;
+
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>('[data-graph-mode]')];
+    const options = root.querySelector('datalist')!;
+    const count = root.querySelector<HTMLElement>('[data-graph-count]');
+    const empty = root.querySelector<HTMLElement>('[data-graph-empty]');
+    const status = root.querySelector<HTMLElement>('[data-graph-status]')!;
+    let current = forMode(mode);
+
+    const apply = (m: GraphMode, first = false) => {
+      mode = m;
+      current = forMode(m);
+      root.dataset.mode = m;
+      for (const b of buttons) b.setAttribute('aria-pressed', String(b.dataset.graphMode === m));
+      if (!first) view.setData(current);
+      options.replaceChildren(
+        ...current.nodes.map((n) => Object.assign(document.createElement('option'), { value: n.kind === 'topic' ? `#${n.label}` : n.label })),
+      );
+      const fill = (tpl: string) => tpl.replace('__N__', String(current.nodes.length)).replace('__L__', String(current.edges.length));
+      if (count) count.textContent = fill(count.dataset.template!);
+      canvas.setAttribute('aria-label', fill(canvas.dataset.labelTemplate!));
+      if (empty) empty.hidden = current.edges.length > 0;
+      status.textContent = '';
+      if (!first) {
+        const url = new URL(location.href);
+        if (m === 'article') url.searchParams.delete('mode');
+        else url.searchParams.set('mode', m);
+        history.replaceState(null, '', url);
+      }
+    };
+    apply(mode, true);
+    for (const b of buttons) b.addEventListener('click', () => apply(b.dataset.graphMode as GraphMode));
+
+    const input = root.querySelector<HTMLInputElement>('[data-graph-search] input')!;
+    root.querySelector('[data-graph-search]')!.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const q = input.value.trim().replace(/^#/, '').toLowerCase();
+      if (!q) return;
+      const hit =
+        current.nodes.find((n) => n.label.toLowerCase() === q) ?? current.nodes.find((n) => n.label.toLowerCase().includes(q));
+      if (hit && view.locate(hit.id)) status.textContent = hit.label;
+      else status.textContent = input.dataset.none!.replace('__Q__', input.value.trim());
     });
-    root.querySelector('[data-graph-reset]')?.addEventListener('click', () => view.resetView());
+    root.querySelector('[data-graph-reset]')?.addEventListener('click', () => {
+      view.resetView();
+      status.textContent = '';
+    });
+    for (const z of root.querySelectorAll<HTMLButtonElement>('[data-graph-zoom]')) {
+      z.addEventListener('click', () => view.zoomBy(z.dataset.graphZoom === 'in' ? 1.25 : 0.8));
+    }
   }
 
-  // Theme switches change the canvas colours.
-  const mo = new MutationObserver(() => views.forEach((v) => v.readColors()));
-  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  document.addEventListener(
-    'astro:before-swap',
-    () => {
-      mo.disconnect();
+  const roots = [...document.querySelectorAll<HTMLElement>('[data-graph]')];
+  if (roots.length) {
+    // Load the renderer only when a graph is about to be seen.
+    observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          observer!.unobserve(entry.target);
+          void init(entry.target as HTMLElement);
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    roots.forEach((r) => observer!.observe(r));
+
+    // Theme switches change the canvas colours.
+    themeObserver = new MutationObserver(() => views.forEach((v) => v.readColors()));
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    const teardown = () => {
+      observer?.disconnect();
+      themeObserver?.disconnect();
       views.forEach((v) => v.destroy());
-    },
-    { once: true },
-  );
+    };
+    document.addEventListener('astro:before-swap', teardown, { once: true });
+    window.addEventListener('pagehide', (e) => {
+      if (!e.persisted) teardown();
+    });
+  }
 </script>

@@ -8,7 +8,9 @@ import { getGarden } from '../../../lib/garden.ts';
 import { formatDisplayDate } from '../../../lib/dates.ts';
 import { githubHistoryUrl, githubSourceUrl, newQuestionIssueUrl } from '../../../lib/site.ts';
 import { localGraph, noteConnections, noteNodeId } from '../../../lib/graph.ts';
+import { topicLabel } from '../../../lib/topics.ts';
 import GraphView from '../../../components/GraphView.astro';
+import TopicChips from '../../../components/TopicChips.astro';
 
 export async function getStaticPaths() {
   const { notes } = await getGarden();
@@ -18,13 +20,24 @@ export async function getStaticPaths() {
 const lang = Astro.params.lang as Lang;
 const t = useTranslations(lang);
 const locale = intlLocale[lang];
-const { notesById, revisionsByNote, reviewDatesByNote, publicQuestions, graph } = await getGarden();
+const { notesById, revisionsByNote, reviewDatesByNote, publicQuestions, graph, vocab, topicsByNote, seriesByOverview } = await getGarden();
 const note = notesById.get(Astro.params.slug!)!;
-// Local graph: two hops, so notes sharing a tag or question also appear.
-const local = localGraph(graph, noteNodeId(note.id), 2);
-const { backlinks, outlinks } = noteConnections(graph.noteLinks, note.id);
+const isOverview = note.data.contentType === 'overview';
+// Local graph: one hop of real relations (body links, related, series, questions).
+const local = localGraph(graph, noteNodeId(note.id), 'article', 1);
+const { backlinks, outlinks, related } = noteConnections(graph, note.id);
 const noteTitle = (id: string) => notesById.get(id)?.data.title ?? id;
 const { Content } = await render(note);
+const hasBody = (note.body ?? '').trim().length > 0;
+
+// Series: the contents of an overview, or this note's place in its series.
+const members = isOverview ? (seriesByOverview.get(note.id) ?? []) : [];
+const series = note.data.series ? notesById.get(note.data.series) : undefined;
+const siblings = series ? (seriesByOverview.get(series.id) ?? []) : [];
+const position = siblings.findIndex((n) => n.id === note.id);
+const prev = position > 0 ? siblings[position - 1] : undefined;
+const next = position >= 0 && position < siblings.length - 1 ? siblings[position + 1] : undefined;
+const topics = (topicsByNote.get(note.id) ?? []).map((id) => ({ id, label: topicLabel(vocab, id, lang) }));
 
 const filePath = note.filePath ?? `src/content/notes/${note.id}.md`;
 const revisions = [...(revisionsByNote.get(note.id) ?? [])].reverse();
@@ -38,10 +51,17 @@ const fmt = (d: string) => formatDisplayDate(d, locale);
 
   <article class="mt-6">
     <header class="mb-8">
-      <p class="font-mono text-xs text-accent">
+      <p class="font-mono text-xs text-accent flex flex-wrap items-center gap-2">
         <a href={localePath(lang, `/notes/category/${note.data.category}/`)} class="hover:underline">
           {categoryLabel(note.data.category, lang)}
         </a>
+        {
+          isOverview && (
+            <span class="chip">
+              {t('series.badge')} · {t('series.count', { n: members.length })}
+            </span>
+          )
+        }
       </p>
       <h1 class="mt-2 text-2xl sm:text-3xl font-semibold leading-tight tracking-tight">{note.data.title}</h1>
       <p class="mt-3 text-muted">{note.data.description}</p>
@@ -49,23 +69,81 @@ const fmt = (d: string) => formatDisplayDate(d, locale);
         <span>
           {t('note.published')} <time datetime={note.data.published} class="font-mono">{fmt(note.data.published)}</time>
         </span>
-        {
-          note.data.tags.length > 0 && (
-            <span class="flex flex-wrap gap-1.5" aria-label={t('note.tags')}>
-              {note.data.tags.map((tag) => (
-                <a class="chip" href={`${localePath(lang, '/notes/')}?tag=${encodeURIComponent(tag)}`}>
-                  #{tag}
-                </a>
-              ))}
-            </span>
-          )
-        }
+        <TopicChips lang={lang} topics={topics} label={t('note.tags')} />
       </div>
+      {
+        series && (
+          <p class="mt-4 text-sm text-muted border-l-2 border-accent pl-3">
+            {t('series.partOf')}:{' '}
+            <a class="link" href={localePath(lang, `/notes/${series.id}/`)}>
+              {series.data.title}
+            </a>
+            <span class="font-mono text-xs"> · {t('series.position', { i: position + 1, n: siblings.length })}</span>
+          </p>
+        )
+      }
     </header>
 
-    <div class="prose">
-      <Content />
-    </div>
+    {
+      hasBody && (
+        <section aria-labelledby={isOverview ? 'overview-heading' : undefined}>
+          {isOverview && (
+            <h2 id="overview-heading" class="section-title mb-4">
+              {t('series.overview')}
+            </h2>
+          )}
+          <div class="prose">
+            <Content />
+          </div>
+        </section>
+      )
+    }
+
+    {
+      isOverview && (
+        <section class:list={[hasBody && 'mt-12']} aria-labelledby="contents-heading">
+          <h2 id="contents-heading" class="section-title">
+            {t('series.contents')}
+          </h2>
+          {members.length ? (
+            <ol class="mt-3 divide-y divide-line border-y border-line">
+              {members.map((m, i) => (
+                <li class="py-3 grid grid-cols-[2.5rem_1fr] gap-2">
+                  <span class="font-mono text-xs text-muted pt-1">{String(i + 1).padStart(2, '0')}</span>
+                  <div class="min-w-0">
+                    <a href={localePath(lang, `/notes/${m.id}/`)} class="font-semibold hover:text-accent">
+                      {m.data.title}
+                    </a>
+                    <p class="mt-0.5 text-sm text-muted">{m.data.description}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p class="mt-3 text-sm text-muted">{t('series.empty', { id: note.id })}</p>
+          )}
+        </section>
+      )
+    }
+
+    {
+      (prev || next) && (
+        <nav class="mt-10 flex flex-wrap justify-between gap-4 text-sm" aria-label={t('series.partOf')}>
+          {prev ? (
+            <a class="link" href={localePath(lang, `/notes/${prev.id}/`)}>
+              {t('series.prev')} {prev.data.title}
+            </a>
+          ) : (
+            <span />
+          )}
+          {next && (
+            <a class="link text-right" href={localePath(lang, `/notes/${next.id}/`)}>
+              {next.data.title} {t('series.next')}
+            </a>
+          )}
+        </nav>
+      )
+    }
   </article>
 
   <aside class="mt-12 card p-5" aria-labelledby="timeline-heading">
@@ -117,47 +195,43 @@ const fmt = (d: string) => formatDisplayDate(d, locale);
 
   <section class="mt-8" aria-labelledby="connections-heading">
     <h2 id="connections-heading" class="section-title">{t('graph.connections')}</h2>
-    <div class="mt-3">
-      <GraphView lang={lang} graph={local} variant="local" center={noteNodeId(note.id)} />
-    </div>
+    {
+      local.nodes.length > 1 ? (
+        <div class="mt-3">
+          <GraphView lang={lang} graph={local} variant="local" center={noteNodeId(note.id)} />
+        </div>
+      ) : (
+        <p class="mt-3 text-sm text-muted">{t('graph.localEmpty')}</p>
+      )
+    }
     <dl class="mt-4 grid gap-4 text-sm sm:grid-cols-2">
-      <div>
-        <dt class="font-medium">{t('graph.backlinks')}</dt>
-        <dd class="mt-1 text-muted">
-          {
-            backlinks.length ? (
-              <ul class="space-y-1">
-                {backlinks.map((id) => (
-                  <li>
-                    <a class="link" href={localePath(lang, `/notes/${id}/`)}>
-                      {noteTitle(id)}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              t('graph.noBacklinks')
-            )
-          }
-        </dd>
-      </div>
       {
-        outlinks.length > 0 && (
-          <div>
-            <dt class="font-medium">{t('graph.outlinks')}</dt>
-            <dd class="mt-1 text-muted">
-              <ul class="space-y-1">
-                {outlinks.map((id) => (
-                  <li>
-                    <a class="link" href={localePath(lang, `/notes/${id}/`)}>
-                      {noteTitle(id)}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </dd>
-          </div>
-        )
+        [
+          { label: t('graph.backlinks'), ids: backlinks, empty: t('graph.noBacklinks') },
+          { label: t('graph.outlinks'), ids: outlinks, empty: undefined },
+          { label: t('graph.related'), ids: related, empty: undefined },
+        ]
+          .filter((g) => g.ids.length > 0 || g.empty)
+          .map((g) => (
+            <div>
+              <dt class="font-medium">{g.label}</dt>
+              <dd class="mt-1 text-muted">
+                {g.ids.length ? (
+                  <ul class="space-y-1">
+                    {g.ids.map((id) => (
+                      <li>
+                        <a class="link" href={localePath(lang, `/notes/${id}/`)}>
+                          {noteTitle(id)}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  g.empty
+                )}
+              </dd>
+            </div>
+          ))
       }
     </dl>
   </section>

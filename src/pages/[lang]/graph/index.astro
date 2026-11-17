@@ -17,7 +17,7 @@ const { graph } = await getGarden();
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">{t('graph.title')}</h1>
   <p class="mt-2 text-muted">{t('graph.intro')}</p>
   <div class="mt-6">
-    <GraphView lang={lang} graph={graph} variant="full" />
+    <GraphView lang={lang} graph={graph} variant="full" mode="article" />
   </div>
   <p class="mt-3 text-xs text-muted font-mono">{t('graph.howto')}</p>
 </BaseLayout>

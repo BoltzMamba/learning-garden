@@ -1,20 +1,21 @@
 ---
 import type { Note } from '../lib/garden.ts';
+import { SECTIONS } from '../lib/sections.ts';
 import { categoryLabel, useTranslations, type Lang } from '../i18n/ui.ts';
 import { localePath } from '../i18n/paths.ts';
 
 interface Props {
   lang: Lang;
   notes: Note[];
-  /** Currently selected category, if any. */
+  /** Currently selected section, if any. */
   current?: string;
 }
 const { lang, notes, current } = Astro.props;
 const t = useTranslations(lang);
 
-const counts = new Map<string, number>();
+// All four sections, always in the same order (empty ones show 0).
+const counts = new Map<string, number>(SECTIONS.map((s) => [s, 0]));
 for (const n of notes) counts.set(n.data.category, (counts.get(n.data.category) ?? 0) + 1);
-const categories = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 ---
 
 <nav aria-label={t('notes.categories')} class="flex flex-wrap items-center gap-2">
@@ -24,14 +25,14 @@ const categories = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].loca
     {notes.length}
   </a>
   {
-    categories.map(([cat, n]) => (
+    SECTIONS.map((cat) => (
       <a
         class="chip"
         href={localePath(lang, `/notes/category/${cat}/`)}
         aria-current={current === cat ? 'page' : undefined}
       >
         {categoryLabel(cat, lang)} <span aria-hidden="true">·</span>
-        {n}
+        {counts.get(cat)}
       </a>
     ))
   }
