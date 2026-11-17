@@ -1,0 +1,39 @@
+---
+/**
+ * Dev-only stress page for the graph renderer (synthetic data, never built):
+ * /lab-graph/stress/ renders 400 nodes so frame times can be measured.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import GraphView from '../../components/GraphView.astro';
+import type { GraphData } from '../../lib/graph.ts';
+
+export function getStaticPaths() {
+  return import.meta.env.DEV ? [{ params: { page: 'stress' } }] : [];
+}
+
+// Deterministic synthetic graph: 300 notes in loose clusters, 60 tags, 40 questions.
+let seed = 7;
+const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+const nodes: GraphData['nodes'] = [];
+const links: GraphData['links'] = [];
+for (let i = 0; i < 300; i++) nodes.push({ id: `note:n${i}`, kind: 'note', label: `Synthetic note ${i}`, path: '/notes/', degree: 0 });
+for (let i = 0; i < 60; i++) nodes.push({ id: `tag:t${i}`, kind: 'tag', label: `#tag${i}`, path: '/notes/', degree: 0 });
+for (let i = 0; i < 40; i++) nodes.push({ id: `q:q${i}`, kind: 'question', label: `Question ${i}`, path: '/questions/', degree: 0 });
+for (let i = 0; i < 300; i++) {
+  const cluster = Math.floor(i / 20);
+  for (let k = 0; k < 2; k++) {
+    const j = cluster * 20 + Math.floor(rand() * 20);
+    if (j !== i && j < 300) links.push({ source: `note:n${i}`, target: `note:n${j}`, kind: 'link' });
+  }
+  links.push({ source: `note:n${i}`, target: `tag:t${Math.floor(rand() * 60)}`, kind: 'tag' });
+}
+for (let i = 0; i < 40; i++) links.push({ source: `q:q${i}`, target: `note:n${Math.floor(rand() * 300)}`, kind: 'question' });
+for (const l of links) {
+  nodes.find((n) => n.id === l.source)!.degree++;
+  nodes.find((n) => n.id === l.target)!.degree++;
+}
+---
+
+<BaseLayout lang="en" title="Graph stress test" wide>
+  <GraphView lang="en" graph={{ nodes, links }} variant="full" />
+</BaseLayout>

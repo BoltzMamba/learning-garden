@@ -25,3 +25,6 @@ pnpm-debug.log*
 
 # CLI temp files
 *.tmp
+
+# Build-time GitHub activity cache (fetched in CI)
+src/data/github-activity.json

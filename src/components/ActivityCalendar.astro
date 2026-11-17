@@ -4,19 +4,25 @@ import { buildCalendarYear, calendarYears } from '../lib/calendar.ts';
 import { formatDisplayDate, parseCalendarDate } from '../lib/dates.ts';
 import { intlLocale, useTranslations, type Lang } from '../i18n/ui.ts';
 import { localePath } from '../i18n/paths.ts';
+import { githubDayUrl } from '../lib/site.ts';
 
 interface Props {
   lang: Lang;
   events: ActivityEvent[];
+  /** GitHub contributions per day (already de-duplicated against garden events). */
+  github?: ReadonlyMap<string, number>;
   /** Today in the calendar timezone (build time). */
   today: string;
 }
 
-const { lang, events, today } = Astro.props;
+const { lang, events, github = new Map<string, number>(), today } = Astro.props;
 const t = useTranslations(lang);
 const locale = intlLocale[lang];
 
-const counts = countEventsByDate(events);
+// One unified intensity: garden activity + GitHub contributions on the same day.
+const notesByDate = countEventsByDate(events);
+const counts = new Map(notesByDate);
+for (const [date, n] of github) counts.set(date, (counts.get(date) ?? 0) + n);
 const years = calendarYears(counts.keys(), today);
 const currentYear = parseCalendarDate(today).year;
 const grids = years.map((y) => buildCalendarYear(y, counts, today));
@@ -32,6 +38,10 @@ const weekdayNames = Array.from({ length: 7 }, (_, d) =>
 const longDate = (date: string) =>
   formatDisplayDate(date, locale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
 const countText = (n: number) => (n === 0 ? t('cal.noActivity') : t('cal.activities', { n }));
+const breakdown = (date: string) =>
+  t('cal.breakdown', { notes: notesByDate.get(date) ?? 0, github: github.get(date) ?? 0 });
+const yearSum = (map: ReadonlyMap<string, number>, year: number) =>
+  [...map].reduce((sum, [d, n]) => (d.startsWith(`${year}-`) ? sum + n : sum), 0);
 
 // Client payload: per-date event lists with localised links.
 const byDate: Record<string, { type: string; title: string; href: string; detail?: string }[]> = {};
@@ -43,6 +53,14 @@ for (const e of events) {
 }
 const payload = {
   events: byDate,
+  github: Object.fromEntries(github),
+  githubLabel: t('cal.github', { n: '__N__' }),
+  githubLabelOne: t('cal.github', { n: 1 }),
+  githubLink: t('cal.githubLink'),
+  githubUrl: githubDayUrl('__DATE__'),
+  tipNotes: t('cal.tip.notes'),
+  tipGithub: t('cal.tip.github'),
+  tipTotal: t('cal.tip.total'),
   labels: {
     publish: t('cal.type.publish'),
     revision: t('cal.type.revision'),
@@ -76,6 +94,10 @@ const payload = {
       <div class="cal-year" data-year={g.year} hidden={g.year !== currentYear}>
         <p class="mb-3 text-sm text-muted">
           {t('cal.yearTotal', { year: g.year, n: g.total, days: g.activeDays })}
+          <span class="whitespace-nowrap">
+            {' · '}
+            {t('cal.breakdown', { notes: yearSum(notesByDate, g.year), github: yearSum(github, g.year) })}
+          </span>
         </p>
         <div class="cal-scroll">
           <div class="cal" style={`--weeks:${g.weeks.length}`}>
@@ -97,12 +119,13 @@ const payload = {
                     class="cell"
                     data-date={c.date}
                     data-level={c.level}
+                    data-notes={notesByDate.get(c.date) ?? 0}
+                    data-github={github.get(c.date) ?? 0}
                     data-future={c.isFuture ? '' : undefined}
                     tabindex={c.date === today || (g.year !== currentYear && c.date.endsWith('-01-01')) ? 0 : -1}
                     aria-pressed="false"
                     aria-current={c.date === today ? 'date' : undefined}
-                    aria-label={`${longDate(c.date)}: ${countText(c.count)}`}
-                    title={`${c.date} · ${countText(c.count)}`}
+                    aria-label={`${longDate(c.date)}: ${countText(c.count)}${c.count ? ` (${breakdown(c.date)})` : ''}`}
                   />
                 ) : (
                   <span class="cell pad" aria-hidden="true" />
@@ -124,6 +147,8 @@ const payload = {
     </div>
   </div>
 
+  <div class="cal-tip" role="tooltip" data-tip hidden></div>
+
   <div class="cal-details mt-4 border-t border-dashed border-line pt-4" aria-live="polite" data-details>
     <p class="text-sm text-muted">{t('cal.hint')}</p>
   </div>
@@ -133,6 +158,40 @@ const payload = {
 </section>
 
 <style>
+  .activity-calendar {
+    position: relative;
+  }
+  .cal-tip {
+    position: absolute;
+    z-index: 5;
+    pointer-events: none;
+    padding: 6px 9px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.55;
+    white-space: nowrap;
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--text) 10%, transparent);
+    transform: translate(-50%, calc(-100% - 8px));
+  }
+  .cal-tip :global(b) {
+    font-weight: 600;
+  }
+  .cal-tip :global(.tip-row) {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    color: var(--text-muted);
+  }
+  .cal-tip :global(.tip-row.total) {
+    color: var(--text);
+    border-top: 1px dashed var(--border);
+    margin-top: 3px;
+    padding-top: 3px;
+  }
   .cal-scroll {
     position: relative;
     overflow-x: auto;
@@ -240,6 +299,14 @@ const payload = {
 <script>
   interface Payload {
     events: Record<string, { type: string; title: string; href: string; detail?: string }[]>;
+    github: Record<string, number>;
+    githubLabel: string;
+    githubLabelOne: string;
+    githubLink: string;
+    githubUrl: string;
+    tipNotes: string;
+    tipGithub: string;
+    tipTotal: string;
     labels: Record<string, string>;
     empty: string;
     future: string;
@@ -265,12 +332,23 @@ const payload = {
     function renderDetails(cell: HTMLButtonElement) {
       const date = cell.dataset.date!;
       const list = payload.events[date] ?? [];
+      const gh = payload.github[date] ?? 0;
       details.replaceChildren();
       const heading = el('h3', 'font-mono text-sm font-medium mb-2');
       heading.textContent = cell.getAttribute('aria-label') ?? date;
       if (date > payload.today) heading.append(' ', payload.future);
       details.append(heading);
+      if (gh > 0) {
+        const p = el('p', 'mb-2 flex flex-wrap items-baseline gap-x-2 text-sm');
+        p.append(el('span', 'chip', 'GitHub'), gh === 1 ? payload.githubLabelOne : payload.githubLabel.replace('__N__', String(gh)));
+        const a = el('a', 'link', payload.githubLink);
+        a.href = payload.githubUrl.replace(/__DATE__/g, date);
+        a.rel = 'noopener';
+        p.append(a);
+        details.append(p);
+      }
       if (!list.length) {
+        if (gh > 0) return;
         details.append(el('p', 'text-sm text-muted', payload.empty));
         return;
       }
@@ -336,6 +414,48 @@ const payload = {
       e.preventDefault();
       select(cells[Math.max(0, Math.min(cells.length - 1, next))], true);
     });
+
+    // Hover / focus tooltip: notes, GitHub and total for the day.
+    const tip = root.querySelector<HTMLElement>('[data-tip]')!;
+    function showTip(cell: HTMLButtonElement) {
+      const notes = Number(cell.dataset.notes ?? 0);
+      const gh = Number(cell.dataset.github ?? 0);
+      tip.replaceChildren();
+      tip.append(el('b', '', cell.dataset.date!));
+      const rows: [string, number, string][] = [
+        [payload.tipNotes, notes, 'tip-row'],
+        [payload.tipGithub, gh, 'tip-row'],
+        [payload.tipTotal, notes + gh, 'tip-row total'],
+      ];
+      for (const [label, n, cls] of rows) {
+        const row = el('div', cls);
+        row.append(el('span', '', label), el('span', '', String(n)));
+        tip.append(row);
+      }
+      const r = cell.getBoundingClientRect();
+      const host = root.getBoundingClientRect();
+      tip.hidden = false;
+      const half = tip.offsetWidth / 2 + 4;
+      const x = Math.min(Math.max(r.left + r.width / 2 - host.left, half), host.width - half);
+      tip.style.left = `${x}px`;
+      tip.style.top = `${r.top - host.top}px`;
+    }
+    const hideTip = () => {
+      tip.hidden = true;
+    };
+    root.addEventListener('pointerover', (e) => {
+      const cell = (e.target as HTMLElement).closest<HTMLButtonElement>('button.cell');
+      if (cell && e.pointerType === 'mouse') showTip(cell);
+    });
+    root.addEventListener('pointerout', (e) => {
+      if ((e.target as HTMLElement).closest('button.cell')) hideTip();
+    });
+    root.addEventListener('focusin', (e) => {
+      const cell = (e.target as HTMLElement).closest<HTMLButtonElement>('button.cell');
+      if (cell && cell.matches(':focus-visible')) showTip(cell);
+    });
+    root.addEventListener('focusout', hideTip);
+    root.querySelectorAll('.cal-scroll').forEach((sc) => sc.addEventListener('scroll', hideTip, { passive: true }));
 
     const visible = years.find((y) => !y.hidden);
     if (visible) showYear(visible.dataset.year!);

@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # Daily rebuild so the learning calendar picks up new GitHub contributions
+  # without manual work (00:15 Asia/Singapore).
+  schedule:
+    - cron: '15 16 * * *'
 
 permissions:
   contents: read
@@ -18,11 +22,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history: the calendar's de-duplication reads which commits only changed notes.
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Last good GitHub activity snapshot, used if GitHub is unreachable today.
+      - uses: actions/cache@v6
+        with:
+          path: src/data/github-activity.json
+          key: github-activity-${{ github.run_id }}
+          restore-keys: github-activity-
+      - name: Sync GitHub contributions
+        run: npm run github:sync
+        env:
+          # Read-only workflow token: public contribution data only, never shipped to the browser.
+          GITHUB_TOKEN: ${{ github.token }}
       - name: Unit and CLI tests
         run: npm test
       - name: Type check

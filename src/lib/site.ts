@@ -3,6 +3,13 @@ export const GITHUB_OWNER = 'BoltzMamba';
 export const GITHUB_REPO = 'learning-garden';
 export const GITHUB_BRANCH = 'main';
 export const REPO_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}`;
+/** GitHub Pages base path (must match `base` in astro.config.mjs). */
+export const SITE_BASE = '/learning-garden';
+
+/** A user's GitHub activity overview for one day. */
+export function githubDayUrl(date: string): string {
+  return `https://github.com/${GITHUB_OWNER}?tab=overview&from=${date}&to=${date}`;
+}
 
 /** Encode each path segment separately so `/` separators survive. */
 export function encodeRepoPath(filePath: string): string {

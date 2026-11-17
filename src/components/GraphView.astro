@@ -1,0 +1,258 @@
+---
+/**
+ * Knowledge graph (Quartz-style). Variants:
+ *   preview — homepage card, ctrl/⌘ + wheel to zoom
+ *   full    — the /graph/ page: wheel zoom, tag toggle, list view
+ *   local   — bottom of a note: the note's neighbourhood
+ */
+import type { GraphData } from '../lib/graph.ts';
+import { useTranslations, type Lang } from '../i18n/ui.ts';
+import { localePath } from '../i18n/paths.ts';
+
+interface Props {
+  lang: Lang;
+  graph: GraphData;
+  variant: 'preview' | 'full' | 'local';
+  /** Highlighted node id (local graph). */
+  center?: string;
+}
+
+const { lang, graph, variant, center } = Astro.props;
+const t = useTranslations(lang);
+
+const nodes = graph.nodes.map((n) => ({ ...n, href: localePath(lang, n.path) }));
+const payload = { nodes, links: graph.links, center };
+const counts = { notes: 0, tags: 0, questions: 0 };
+for (const n of graph.nodes) counts[n.kind === 'note' ? 'notes' : n.kind === 'tag' ? 'tags' : 'questions']++;
+
+// For the list view: each note's connections.
+const labelOf = new Map(nodes.map((n) => [n.id, n]));
+const connections = new Map<string, Set<string>>();
+for (const l of graph.links) {
+  (connections.get(l.source) ?? connections.set(l.source, new Set()).get(l.source)!).add(l.target);
+  (connections.get(l.target) ?? connections.set(l.target, new Set()).get(l.target)!).add(l.source);
+}
+---
+
+<figure class:list={['graph-view', `graph-${variant}`]} data-graph={variant}>
+  <canvas
+    class="graph-canvas"
+    role="img"
+    aria-label={t('graph.canvasLabel', { nodes: graph.nodes.length, links: graph.links.length })}
+  ></canvas>
+
+  <figcaption class="graph-bar">
+    <span class="legend" aria-hidden="true">
+      <span><i class="dot note"></i>{t('graph.legend.note')}</span>
+      {counts.tags > 0 && <span><i class="dot tag"></i>{t('graph.legend.tag')}</span>}
+      {counts.questions > 0 && <span><i class="dot question"></i>{t('graph.legend.question')}</span>}
+    </span>
+    <span class="hint">
+      <span class="hint-mouse">{t(variant === 'full' ? 'graph.hint' : 'graph.hintEmbedded')}</span>
+      <span class="hint-touch">{t('graph.hintTouch')}</span>
+    </span>
+    {
+      variant === 'full' && (
+        <span class="controls">
+          {counts.tags > 0 && (
+            <label class="chip toggle">
+              <input type="checkbox" data-graph-tags checked />
+              {t('graph.showTags')}
+            </label>
+          )}
+          <button type="button" class="chip" data-graph-reset>
+            {t('graph.reset')}
+          </button>
+        </span>
+      )
+    }
+  </figcaption>
+
+  {
+    variant === 'full' && (
+      <details class="graph-list">
+        <summary>{t('graph.list')}</summary>
+        <ul>
+          {nodes
+            .filter((n) => n.kind === 'note')
+            .map((n) => {
+              const linked = [...(connections.get(n.id) ?? [])].map((id) => labelOf.get(id)!).filter(Boolean);
+              return (
+                <li>
+                  <a class="link" href={n.href}>
+                    {n.label}
+                  </a>
+                  {linked.length ? (
+                    <span class="text-muted">
+                      {' — '}
+                      {linked.map((m, i) => (
+                        <>
+                          {i > 0 && ', '}
+                          <a href={m.href}>{m.label}</a>
+                        </>
+                      ))}
+                    </span>
+                  ) : (
+                    <span class="text-muted"> — {t('graph.isolated')}</span>
+                  )}
+                </li>
+              );
+            })}
+        </ul>
+      </details>
+    )
+  }
+
+  <script type="application/json" data-graph-payload set:html={JSON.stringify(payload).replace(/</g, '\\u003c')} />
+</figure>
+
+<style>
+  .graph-view {
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .graph-canvas {
+    display: block;
+    width: 100%;
+    height: 300px;
+    cursor: grab;
+    touch-action: pan-y;
+  }
+  .graph-full .graph-canvas {
+    height: max(420px, calc(100svh - 300px));
+    touch-action: none;
+  }
+  .graph-local .graph-canvas {
+    height: 240px;
+  }
+  @media (max-width: 640px) {
+    .graph-preview .graph-canvas {
+      height: 240px;
+    }
+    .graph-full .graph-canvas {
+      height: max(360px, calc(100svh - 320px));
+    }
+  }
+  .graph-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+    padding: 8px 12px;
+    border-top: 1px dashed var(--border);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .legend {
+    display: flex;
+    gap: 12px;
+  }
+  .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--text-muted);
+  }
+  .dot.tag {
+    background: transparent;
+    border: 1.2px solid var(--text-muted);
+  }
+  .dot.question {
+    width: 7px;
+    height: 7px;
+    border-radius: 0;
+    background: transparent;
+    border: 1.2px solid var(--text-muted);
+    transform: rotate(45deg);
+  }
+  .hint {
+    margin-left: auto;
+  }
+  .hint-touch {
+    display: none;
+  }
+  @media (hover: none) {
+    .hint-mouse {
+      display: none;
+    }
+    .hint-touch {
+      display: inline;
+    }
+  }
+  .controls {
+    display: flex;
+    gap: 6px;
+  }
+  .toggle {
+    cursor: pointer;
+  }
+  .toggle input {
+    accent-color: var(--accent);
+    margin: 0;
+  }
+  .graph-list {
+    border-top: 1px dashed var(--border);
+    padding: 8px 12px 12px;
+    font-size: 14px;
+  }
+  .graph-list summary {
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .graph-list ul {
+    margin-top: 8px;
+    display: grid;
+    gap: 4px;
+  }
+  .graph-list a:not(.link) {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--border);
+  }
+</style>
+
+<script>
+  import { GraphView, type GraphPayload } from '../scripts/graph-view.ts';
+
+  const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const views: GraphView[] = [];
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-graph]')) {
+    const payload: GraphPayload = JSON.parse(root.querySelector('[data-graph-payload]')!.textContent!);
+    const variant = root.dataset.graph;
+    const view = new GraphView(root.querySelector('canvas')!, payload, {
+      wheelZoom: variant === 'full',
+      labels: variant !== 'preview',
+      reducedMotion: motion.matches,
+    });
+    views.push(view);
+    root.querySelector<HTMLInputElement>('[data-graph-tags]')?.addEventListener('change', (e) => {
+      view.setShowTags((e.target as HTMLInputElement).checked);
+    });
+    root.querySelector('[data-graph-reset]')?.addEventListener('click', () => view.resetView());
+  }
+
+  // Theme switches change the canvas colours.
+  const mo = new MutationObserver(() => views.forEach((v) => v.readColors()));
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  document.addEventListener(
+    'astro:before-swap',
+    () => {
+      mo.disconnect();
+      views.forEach((v) => v.destroy());
+    },
+    { once: true },
+  );
+</script>

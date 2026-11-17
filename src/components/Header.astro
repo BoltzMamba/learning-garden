@@ -18,6 +18,7 @@ const nav = [
   { href: '/', label: t('nav.home'), match: (p: string) => p === '/' },
   { href: '/notes/', label: t('nav.notes'), match: (p: string) => p.startsWith('/notes/') },
   { href: '/questions/', label: t('nav.questions'), match: (p: string) => p.startsWith('/questions/') },
+  { href: '/graph/', label: t('nav.graph'), match: (p: string) => p.startsWith('/graph/') },
 ];
 const otherLangs = LANGS.filter((l) => l !== lang);
 ---
@@ -37,7 +38,8 @@ const otherLangs = LANGS.filter((l) => l !== lang);
       <ul class="flex items-center gap-1 sm:gap-2 text-sm">
         {
           nav.map((item) => (
-            <li>
+            // On phones the logo already links home, which frees room for the Graph link.
+            <li class={item.href === '/' ? 'hidden sm:block' : undefined}>
               <a
                 href={localePath(lang, item.href)}
                 aria-current={item.match(path) ? 'page' : undefined}

@@ -19,15 +19,26 @@ export interface CalendarYear {
   monthStarts: number[];
   total: number;
   activeDays: number;
+  /** Count that maps to the darkest level this year. */
+  reference: number;
 }
 
-/** Fixed thresholds keep colours comparable across years. */
-export function levelForCount(count: number): Level {
+/**
+ * Intensity reference for a year: the 90th percentile of its active days,
+ * never below 4. Small counts are never inflated, and one exceptional day
+ * does not wash out the rest of the year.
+ */
+export function levelReference(counts: Iterable<number>): number {
+  const active = [...counts].filter((n) => n > 0).sort((a, b) => a - b);
+  if (!active.length) return 4;
+  const p90 = active[Math.min(active.length - 1, Math.floor(active.length * 0.9))];
+  return Math.max(4, p90);
+}
+
+/** Level 1–4 in proportion to the year's reference count. */
+export function levelForCount(count: number, reference = 4): Level {
   if (count <= 0) return 0;
-  if (count === 1) return 1;
-  if (count === 2) return 2;
-  if (count <= 4) return 3;
-  return 4;
+  return Math.min(4, Math.ceil((4 * count) / reference)) as Level;
 }
 
 export function buildCalendarYear(year: number, counts: ReadonlyMap<string, number>, today: string): CalendarYear {
@@ -38,6 +49,8 @@ export function buildCalendarYear(year: number, counts: ReadonlyMap<string, numb
 
   const weeks: CalendarCell[][] = [];
   const monthStarts: number[] = [];
+  const prefix = `${String(year).padStart(4, '0')}-`;
+  const reference = levelReference([...counts].filter(([d]) => d.startsWith(prefix)).map(([, n]) => n));
   let total = 0;
   let activeDays = 0;
 
@@ -52,13 +65,13 @@ export function buildCalendarYear(year: number, counts: ReadonlyMap<string, numb
         if (count > 0) activeDays++;
         if (day === 1) monthStarts.push(weeks.length);
       }
-      week.push({ date: cursor, count, level: levelForCount(count), inYear, isFuture: cursor > today });
+      week.push({ date: cursor, count, level: levelForCount(count, reference), inYear, isFuture: cursor > today });
       cursor = addDays(cursor, 1);
     }
     weeks.push(week);
   }
 
-  return { year, weeks, monthStarts, total, activeDays };
+  return { year, weeks, monthStarts, total, activeDays, reference };
 }
 
 /** Years to offer in the calendar: every year with activity plus the current year. */

@@ -10,7 +10,7 @@ import {
   normalizeCalendarDate,
   todayInTimeZone,
 } from '../src/lib/dates.ts';
-import { buildCalendarYear, calendarYears, levelForCount } from '../src/lib/calendar.ts';
+import { buildCalendarYear, calendarYears, levelForCount, levelReference } from '../src/lib/calendar.ts';
 
 describe('calendar dates', () => {
   test('leap years', () => {
@@ -87,7 +87,13 @@ describe('calendar grid', () => {
   });
 
   test('intensity levels and available years', () => {
-    assert.deepEqual([0, 1, 2, 3, 4, 5, 9].map(levelForCount), [0, 1, 2, 3, 3, 4, 4]);
+    assert.deepEqual([0, 1, 2, 3, 4, 5, 9].map((n) => levelForCount(n)), [0, 1, 2, 3, 4, 4, 4]);
+    // A busier year scales the colours: 20 contributions is the darkest when the reference is 20.
+    assert.deepEqual([1, 5, 10, 15, 20, 40].map((n) => levelForCount(n, 20)), [1, 1, 2, 3, 4, 4]);
+    assert.equal(levelReference([]), 4);
+    assert.equal(levelReference([1, 1, 2]), 4);
+    assert.equal(levelReference([...Array(9).fill(10), 80]), 80);
+    assert.equal(levelReference([...Array(20).fill(10), 80]), 10);
     assert.deepEqual(calendarYears(['2025-03-01', '2024-01-01'], '2026-11-16'), [2026, 2025, 2024]);
   });
 });
