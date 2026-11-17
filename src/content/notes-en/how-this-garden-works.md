@@ -3,8 +3,8 @@ title: "Learning Garden Guide: From a New Note to the Knowledge Graph"
 description: "A complete walkthrough: running the site locally, writing Markdown notes, organising series and connections, then reviews, questions, the learning calendar and publishing to GitHub Pages."
 translation:
   mode: auto
-  sourceHash: "sha256:e16167def709daec06a417414ca1bf9e4f28f6ac2e620a1383765faee20d1971"
-  generatedHash: "sha256:4178087c6b591048d1f260b6a358b32e089dbd0f6b25707584858d08e91f1040"
+  sourceHash: "sha256:429f1671f193625e15e79afbd4e1f763a78f1e50cfd8dc4bf4d40af8cf426c77"
+  generatedHash: "sha256:d89e023ecb2c739c1466d3031d3c761fa4ab70ac6eba7c039e873e7018aa215b"
   rulesVersion: 1
 ---
 
@@ -35,15 +35,16 @@ This page uses a hand-written table of contents and the existing heading anchors
 3. [Creating your first note](#creating-your-first-note)
 4. [Managing Chinese and English notes](#managing-chinese-and-english-notes)
 5. [Writing and editing Markdown](#writing-and-editing-markdown)
-6. [Managing sections, tags and series](#managing-sections-tags-and-series)
-7. [Maintaining and using the knowledge graph](#maintaining-and-using-the-knowledge-graph)
-8. [Recording reviews](#recording-reviews)
-9. [Editing notes and recording revisions](#editing-notes-and-recording-revisions)
-10. [Questions and answers](#questions-and-answers)
-11. [Using the learning calendar](#using-the-learning-calendar)
-12. [Publishing](#publishing)
-13. [Troubleshooting](#troubleshooting)
-14. [Privacy and security](#privacy-and-security)
+6. [Concept Registry and Concept Mode](#concept-registry-and-concept-mode)
+7. [Managing sections, tags and series](#managing-sections-tags-and-series)
+8. [Maintaining and using the knowledge graph](#maintaining-and-using-the-knowledge-graph)
+9. [Recording reviews](#recording-reviews)
+10. [Editing notes and recording revisions](#editing-notes-and-recording-revisions)
+11. [Questions and answers](#questions-and-answers)
+12. [Using the learning calendar](#using-the-learning-calendar)
+13. [Publishing](#publishing)
+14. [Troubleshooting](#troubleshooting)
+15. [Privacy and security](#privacy-and-security)
 
 ## What Learning Garden is
 
@@ -88,7 +89,8 @@ After saving a Markdown file, look at the browser. The body usually updates with
 | `npm run check` | Astro / TypeScript checks |
 | `npm run translate:check` | Reports missing English editions, sync states and issues requiring the author; does not translate |
 | `npm run translate:check -- --strict` | Strict bilingual publishing check; blocking states return a non-zero exit code |
-| `npm run build` | Checks bilingual content strictly, then generates the static site into `dist/` |
+| `npm run concepts:check` | Checks the registry, concept IDs in notes and definition source anchors |
+| `npm run build` | Checks bilingual content strictly and validates concepts, then generates the static site into `dist/` |
 | `npm run check:links` | Checks internal links and assets of the generated pages; build first |
 | `npm run verify` | Runs the tests, type check, build and internal link check in order |
 | `npm run preview` | Previews the latest `dist/` build; use the address the terminal shows |
@@ -331,6 +333,65 @@ console.log(steps.join(" → "));
 
 The project is configured with Shiki syntax highlighting, math formulas and the Wiki Link plugin; do not assume that arbitrary extension syntax from other note-taking apps works here.
 
+### Text colours and highlights
+
+Colour supports reading; it does not replace an explanation. The site uses fixed semantic colour IDs so the same note adapts to light and dark themes. Direct Hex values are unsupported and cannot guarantee readability in both themes. Light mode uses muted, soft colours. Dark mode uses a soft neon style with deeper backgrounds and fine edges to emphasise text, rather than broad glowing effects.
+
+For **default yellow highlighting**, prefer `==文字==`: two equals signs on each side, directly against the text:
+```markdown
+==这是需要重点记住的内容==
+```
+
+Rendered result: ==This is something important to remember==.
+
+Use `:hl[]` for a **specific background colour**. It accepts only the following five lowercase IDs. This is Markdown extension syntax, not Ruby code:
+```markdown
+:hl[这是一个错误示例]{color="red"}
+:hl[这是核心结论]{color="yellow"}
+:hl[这是概念定义]{color="blue"}
+:hl[这是正确方案]{color="green"}
+:hl[这是个人思考]{color="pink"}
+```
+
+| Background highlight | Fixed ID | Suggested use and rendered example |
+| --- | --- | --- |
+| Yellow | `yellow` | :hl[Core knowledge and important conclusions]{color="yellow"} |
+| Red | `red` | :hl[Errors and risks]{color="red"} |
+| Blue | `blue` | :hl[Definitions and concepts]{color="blue"} |
+| Green | `green` | :hl[Correct approaches and solutions]{color="green"} |
+| Pink | `pink` | :hl[Personal reflections and additional notes]{color="pink"} |
+
+Use `:ink[]` to **change the text colour itself**, without adding a background:
+```markdown
+:ink[默认正文]{color="default"}
+:ink[辅助信息]{color="gray"}
+:ink[重要定义]{color="blue"}
+:ink[错误操作]{color="red"}
+:ink[核心提示]{color="yellow"}
+```
+
+| Text colour | Fixed ID | Suggested use and rendered example |
+| --- | --- | --- |
+| Default | `default` | :ink[Default text]{color="default"} |
+| Gray | `gray` | :ink[Supporting information]{color="gray"} |
+| Blue | `blue` | :ink[Concepts and definitions]{color="blue"} |
+| Red | `red` | :ink[Errors, risks and warnings]{color="red"} |
+| Yellow | `yellow` | :ink[Important reminders]{color="yellow"} |
+
+These uses are writing suggestions, not semantic categories enforced by the program. Text colours do not include `green` or `pink`; highlights do not include `default` or `gray`. Without a colour attribute, `:hl[文字]` defaults to yellow and `:ink[文字]` to the normal text colour. Still prefer `==文字==` for a clear, concise yellow highlight.
+
+Text colours and highlights can be nested, for example `:hl[注意：:ink[这是风险提示]{color="red"}]{color="yellow"}`. Rendered result: :hl[Attention: :ink[this is a risk warning]{color="red"}]{color="yellow"}. The theme adjusts coloured text inside a highlight, but use combinations sparingly, avoid low-contrast pairings, and check light, dark and mobile views separately.
+
+**Boundaries and practical guidance:**
+
+- Use fixed lowercase IDs, not `#ff0000`, arbitrary CSS or `style` attributes. Invalid colours and extra attributes produce build warnings and render the content without colour; missing colour does not necessarily mean the build failed.
+- Use `==文字==` for default yellow, `:hl[]` for other backgrounds and `:ink[]` for the text itself. Do not span paragraphs or write `== 文字 ==`. Unpaired equals signs, `===` and spaced comparisons such as `a == b` stay literal.
+- `==` inside fenced or inline code does not become a highlight, as in `a == b` and `==示例==`. Math is parsed before colour marks; for example, the equals sign in $a = b$ remains part of the formula.
+- Use colour marks in prose, lists, quotations and tables. In headings, they produce a warning and lose their colour to keep heading anchors and the table of contents stable.
+- Never rely on colour alone: write labels such as “error”, “attention” and “correct approach” so readers who cannot distinguish the colours can still understand.
+- These extensions render on this site; ordinary Markdown editors may not preview them fully. Treat the local website preview as the final reference.
+- When translating with Claude/Codex, preserve mark structure, count and colour IDs, translating only visible text inside the marks. Keep code examples unchanged. The current translation checker counts marks per colour; missing or recoloured marks can make an Auto edition `INVALID`. Follow the protection workflow described earlier rather than editing hashes by hand.
+
 ### Math formulas
 
 Put inline formulas between a pair of `$` and display formulas between two `$$` lines; they are rendered with KaTeX:
@@ -370,6 +431,94 @@ Images can go in `public/images/`, for example `public/images/agent-loop.png`, r
 2. Open the matching `src/content/notes/<id>.md` and change the body or metadata, keeping the file name and the first publication date.
 3. Start the preview and check the title, tables, code, formulas, images and links.
 4. After changing the Chinese title, description or body, check and synchronise the English edition; structural changes alone usually only need a rebuild. Restart the server if aggregated information does not change, and run `npm run verify` before publishing.
+
+## Concept Registry and Concept Mode
+
+**Goal:** provide short, accurate explanations of technical terms shared across articles, so readers can consult them on demand and find the full source.
+
+### Concept, Topic, Article and Series
+
+The Concept Registry is the bilingual dictionary in `src/data/concepts.json`. Each concept has a stable ID, Chinese and English names and short definitions, and a source note with a definition anchor. A definition usually needs only one or two sentences; derivations, examples, implementation details and edge cases belong in the source note.
+
+| Object | Question it answers | Where to maintain it |
+| --- | --- | --- |
+| Concept | What does this technical term mean here? | `src/data/concepts.json` |
+| Topic / Tag | Which notes discuss the same topic? | `src/data/topics.json` and note `tags` |
+| Article | What is the full explanation, practical process or conclusion? | `src/content/notes/<id>.md` and its English edition |
+| Series | How should a set of notes be organised and read? | An overview note and members' `series` and `order` |
+
+Concept Mode is an **inline terminology aid within articles**; Graph View visualises relationships between articles and topics. Concept references currently create no new Graph nodes or edges, and do not replace links to other notes. Chinese and English share a Concept ID, while displaying definitions and source pages in the corresponding language.
+
+### Checking, proposing and adding concepts
+
+1. Run `npm run concepts:check -- --list` to see existing IDs, Chinese and English terms, sources and referencing notes. Then open `src/data/concepts.json` to inspect aliases and definitions and check whether the meaning matches.
+2. Include technical concepts with a clear meaning that recur across notes, may need explanation for readers, and already have a source note explaining them. Everyday words such as “parameter”, “output” and “result” usually do not qualify. A shared name does not imply a shared meaning.
+3. Choose a stable ID that distinguishes the domain: use only lowercase English letters, digits and single hyphens, without spaces, underscores or Chinese characters. Do not change the ID just because the displayed term changes.
+4. Submit a candidate to the author: ID, Chinese and English terms and definitions, optional aliases, source note ID and anchor, and why existing entries do not cover it. Add it to JSON **only after the author confirms**. There is currently no automatic approval interface or CLI for creating concepts.
+5. Add a definition anchor with the same ID to both languages of the source note, then complete the registry. Check the fields below; do not copy this JSON into note frontmatter.
+
+| Field | What to enter |
+| --- | --- |
+| Top-level JSON key | Stable Concept ID; its value is an object containing `zh`, `en` and `source` |
+| `zh.term` / `en.term` | The main term in each language; neither may be empty |
+| `zh.definition` / `en.definition` | What it means in this context; both languages are required |
+| `zh.aliases` / `en.aliases` | Optional arrays of strings; omit or use `[]` if unused, without repeating the main term or another alias |
+| `source.note` | Source note filename without `.md`, not its title or full URL |
+| `source.anchor` | Stable definition anchor ID in the source body, without `#`; identical in both languages |
+
+Chinese definitions are usually 20–60 characters, English definitions one or two sentences. Keep qualifiers whose absence would mislead; do not squeeze every implementation detail and edge case into the card. Currently, Chinese definitions over 80 characters or three sentences, and English definitions over 280 characters or two sentences, produce warnings rather than hard build errors. Meeting the length guidance does not establish correctness: author review still matters.
+
+After adding a concept, run `npm run concepts:check`, `npm run translate:check -- --strict` and `npm run verify`, in that order. Concept checks cover data, reference IDs, sources and anchors; strict translation checks cover English availability and synchronisation; the final build and link check validate actual pages. Missing English files still block publishing through the strict bilingual gate, so a passing concept check alone is insufficient.
+
+### Explicit references in Markdown
+
+Syntax example: `:concept[Context]{id="llm-context"}`. The bracketed `Context` is the text readers see; `llm-context` is the stable ID used to find the definition. Chinese and English may display different labels but must retain the same ID. This is Markdown extension syntax, not Arduino code.
+
+**The production registry is currently empty.** The `llm-context` used here comes from development tests, not an approved production entry. This section therefore shows literal syntax, without pretending to offer an interactive term. Until the author approves and registers it, do not insert this example as a live prose reference: an unknown ID blocks the build.
+
+When writing, revising or tidying a note, Claude/Codex should list existing concepts, check their meanings in context, then explicitly mark the **first significant occurrence**. Later repetitions usually stay plain. You can give the Agent this request:
+
+> Follow AGENTS.md to check the registry. Mark only the first significant occurrence of an existing concept with the same meaning in this article; do not guess by name for ambiguous terms such as Context or Memory. Propose new concepts for author confirmation instead of adding them directly. Preserve Concept IDs and definition anchors when synchronising English, and report Manual editions before making changes.
+
+This “automatic check” is an Agent writing workflow. The CLI only validates, and the site renders explicit marks; aliases help authors find entries rather than triggering automatic recognition throughout the text. Syntax inside fenced code, inline code and math does not become a concept reference. Headings do not support these marks: they produce warnings and render as plain heading text. Do not add extra attributes; invalid references fail the build.
+
+### Using Concept Mode as a reader
+
+Only articles whose body references registered concepts show the **Concept mode** button near the tags in the article header; its Chinese label is **概念模式**. Articles without references have no button, including this guide at present.
+
+- **Turn it on or off:** it is off by default. Click the button to enable it, and again to disable it. The browser remembers the choice in `lg-concepts` across reloads and articles. If local storage is unavailable, the choice applies only to the current page.
+- **Recognise terms:** enabled references have a fine dotted underline, rather than a background highlight across a paragraph. Turning the mode off restores ordinary text and removes the terms from keyboard focus order.
+- **Mouse:** hover to see a short definition card. Click the term or the card's **Read the full explanation** link (“查看完整解释” in Chinese) to open the definition in the source note in the same language.
+- **Phone:** the first tap opens the card; use its link to visit the source. Tap the same term again or tap outside the card to dismiss it. A second tap on the term is not a navigation action.
+- **Keyboard:** once enabled, use Tab to focus a term and show its definition, Enter to visit the source and Escape to close the card. The toggle button also supports keyboard operation.
+
+The card adapts to light and dark themes and displays the current language's term, definition and source title. It also shows the other language's term when different. A source in the current article leads directly to its same-page anchor.
+
+### Maintaining definitions and source anchors
+
+A definition anchor looks like `:dfn[上下文]{#llm-context}`, with `:dfn[Context]{#llm-context}` in English. Put it in the source article's prose where the term is actually explained, followed by the full explanation. It establishes a stable destination, not a concept reference or automatic registry entry.
+
+- **Move an explanation:** move its `:dfn[]` mark with it, retaining the anchor ID. This is independent of generated heading anchors, so changing a heading does not require changing the definition anchor.
+- **Change the source article:** first add the anchor to both languages of the new article, then update `source.note` / `source.anchor`. Address the old location after checks pass. Each concept needs its own source anchor; an anchor must not repeat within a note or collide with a heading ID.
+- **Revise a definition:** check both short definitions in the registry against the source prose and keep their meaning consistent. Registry-only edits do not change an article's body Hash, but require a rebuild. If the source prose changes, follow the translation workflow above.
+- **Repair broken references:** use the file and ID reported by `npm run concepts:check` to restore an anchor or correct a source or unknown ID, then build and run `npm run check:links`. Do not simply remove validation errors to conceal the problem.
+- **Protect English editions:** Auto translations must preserve concept references and definition anchors with the same IDs, positions and counts, translating only visible labels. Adding marks may turn an old Auto edition `INVALID`; prepare a candidate through the protected translation workflow and let the author decide whether replacement is allowed. Never write Hash values by hand. Missing marks or anchors in a Manual edition must be fixed by the author; do not overwrite it.
+
+Concept maintenance does not change article Slugs, first publication dates, `series`, `related` or Tags. Synchronising English creates neither a second article nor an additional publication record.
+
+### Concept Registry troubleshooting
+
+| Question | What to check or do |
+| --- | --- |
+| Why is there no highlighting after enabling the mode, or no button at all? | Only valid explicit prose references receive dotted underlines. Plain text and code examples do not count; empty registries and articles without references have no button. Rebuild or restart the development server after additions. |
+| Why is a term not recognised automatically? | The first version does not match by name. An author or Agent checks the meaning and adds `:concept[]`; aliases do not insert marks automatically either. |
+| How do I avoid mislabelling Context / Memory? | Compare definitions and domains, not just spelling: React Context is not LLM Context. Leave uncertain text plain and propose a separate concept if needed. |
+| Why should definitions stay short? | Cards answer “what is it”; the source note holds the full explanation. Excess length only warns, and accuracy still requires human judgement. |
+| How do I add a concept? | Check for duplicates, submit a bilingual candidate and source, then edit JSON, add both languages' anchors and validate after author confirmation. |
+| How do I revise an existing definition? | Update both short definitions and check the source prose. Keep the ID, rebuild the pages and synchronise the translation if the prose changed. |
+| Why might a source anchor stop working? | Deleting or renaming a source, removing or changing an anchor, or adding it only in Chinese can break navigation. Use stable `:dfn[]` anchors and run concept and link checks. |
+| How does English retain references? | Keep Concept IDs and definition anchors identical, translating only visible labels; source paths still use the same article ID. Manual editions belong to the author. |
+| How is a Concept different from a Tag? | A Concept explains a term; a Tag groups articles by topic. Concept references do not automatically add Tags or knowledge graph relationships. |
 
 ## Managing sections, tags and series
 
