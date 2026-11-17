@@ -3,14 +3,14 @@ title: "Agent Learning Notes 01: What Is an Agent"
 description: "A first systematic look at what an agent is, what it is made of, and its basic loop."
 translation:
   mode: auto
-  sourceHash: "sha256:712c0168ba5644c5611abc82a7d939546a2a7794b63941ab993c744f6133e1b6"
-  generatedHash: "sha256:c6e306c25c63a2dfd3873a058b96e0a24d5fe1da5edc17d9d7e398347b0ba395"
+  sourceHash: "sha256:9eaac12b00c97efe0a8f325aaa27fbe57dd3f9d57aec69bb3fce16a6c2e4e123"
+  generatedHash: "sha256:00c4666109ea7c1c590c4d91597ae1fdddc829c654972fc7dd079ee53285430a"
   rulesVersion: 1
 ---
 
 ## AI Agent
 
-An :dfn[AI agent]{#what-is-an-agent} uses an LLM as its brain and adds three modules — planning, memory and tool use — so it can solve complex tasks. For example, it decides what to do next, how to call external tools, reads what the tools return, and keeps going based on those results.
+An :dfn[AI agent]{#what-is-an-agent} uses an LLM as its brain and adds three modules — planning, memory and :concept[tool use]{id="tool-use"} — so it can solve complex tasks. For example, it decides what to do next, how to call external tools, reads what the tools return, and keeps going based on those results.
 
 **==Agent ≈ LLM (brain) + Planning + Memory + Tools==**
 
@@ -22,7 +22,7 @@ An :dfn[AI agent]{#what-is-an-agent} uses an LLM as its brain and adds three mod
 
 A complex task usually cannot be completed in a single pass of reasoning.
 
-The agent needs to break the task into several subgoals and decide the order in which to carry them out.
+The agent needs to :concept[break the task into several subgoals]{id="task-decomposition"} and decide the order in which to carry them out.
 
 - **:dfn[Task Decomposition]{#task-decomposition}:** Split a complex problem into small tasks that are easier to handle.
 - **Reflection:** Check whether earlier actions worked, learn from mistakes, and adjust the strategy for the next step.
@@ -47,7 +47,7 @@ e.g. When an agent keeps calling the wrong tool, or keeps failing to make new pr
 
 An agent needs to store, retrieve and reuse information across multiple steps.
 
-- **:dfn[Short-Term Memory]{#short-term-memory}:** Information in the current context.
+- **:dfn[Short-Term Memory]{#short-term-memory}:** Information in the current :concept[context]{id="llm-context"}.
 - **:dfn[Long-Term Memory]{#long-term-memory}:** Usually implemented with an external database that provides persistent storage and retrieval outside the model, such as a vector database.
 
 #### a. Why is long-term memory needed?
@@ -66,7 +66,7 @@ But this approach has three problems:
 
 - **Efficiency of information use:** Large amounts of information unrelated to the current task can make it harder for the model to identify the key evidence, leading to omissions or confusion.
 
-So an agent can introduce a long-term memory mechanism: persist the information worth keeping in a storage system outside the model's context, and retrieve it on demand according to the current task.
+So an agent can introduce a :concept[long-term memory]{id="long-term-memory"} mechanism: persist the information worth keeping in a storage system outside the model's context, and retrieve it on demand according to the current task.
 
 #### b. How can long-term memory be retrieved efficiently?
 

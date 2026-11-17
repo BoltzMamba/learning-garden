@@ -29,6 +29,7 @@
     "github-slugger": "^2.0.0",
     "katex": "^0.19.1",
     "mdast-util-directive": "^3.2.0",
+    "mermaid": "^12.3.0",
     "micromark-extension-directive": "^4.0.0",
     "micromark-util-chunked": "^2.0.1",
     "micromark-util-classify-character": "^2.0.1",

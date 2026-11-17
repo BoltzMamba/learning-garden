@@ -10,7 +10,7 @@ order: 10
 
 ## AI Agent
 
-:dfn[AI Agent]{#what-is-an-agent} 让 LLM 充当智能体的大脑，再通过规划、记忆和工具使用三个模块，使其具备解决复杂任务的能力。例如决定下一步做什么、如何调用外部工具、读取工具返回结果，并且根据结果继续执行。
+:dfn[AI Agent]{#what-is-an-agent} 让 LLM 充当智能体的大脑，再通过规划、记忆和:concept[工具使用]{id="tool-use"}三个模块，使其具备解决复杂任务的能力。例如决定下一步做什么、如何调用外部工具、读取工具返回结果，并且根据结果继续执行。
 
 **==Agent ≈ LLM（大脑） + Planning（规划）+ Memory（记忆）+ Tools（工具）==**
 
@@ -22,7 +22,7 @@ order: 10
 
 复杂任务通常无法通过一次推理完成。
 
-Agent 需要把任务分解成多个子目标，并决定执行顺序。
+Agent 需要把:concept[任务分解]{id="task-decomposition"}成多个子目标，并决定执行顺序。
 
 - **:dfn[Task Decomposition（任务分解）]{#task-decomposition}:** 把复杂问题拆分为容易处理的小任务。
 - **Reflection（反思）:** 检查此前的行动是否有效，从错误中吸取经验，调整下一步策略。
@@ -47,7 +47,7 @@ e.g. 当 Agent 连续调用错误的工具 / 一直无法取得新进展，应�
 
 Agent 需要在多个步骤之间保存、检索和复用信息。
 
-- **:dfn[短期记忆（Short-Term Memory）]{#short-term-memory}:** 当前上下文中的信息。
+- **:dfn[短期记忆（Short-Term Memory）]{#short-term-memory}:** 当前:concept[上下文]{id="llm-context"}中的信息。
 - **:dfn[长期记忆（Long-Term Memory）]{#long-term-memory}:** 通常通过外部数据库实现外部持久化存储与检索，例如向量数据库。
 
 #### a. 为什么需要长期记忆？
@@ -66,7 +66,7 @@ Agent 需要在多个步骤之间保存、检索和复用信息。
 
 - **信息利用效率:** 大量与当前任务无关的信息可能干扰模型识别关键证据，导致遗漏或混淆。
 
-因此，Agent 可以引入长期记忆机制，将需要保留的信息持久化到模型上下文之外的存储系统中，并根据当前任务按需检索。
+因此，Agent 可以引入:concept[长期记忆]{id="long-term-memory"}机制，将需要保留的信息持久化到模型上下文之外的存储系统中，并根据当前任务按需检索。
 
 #### b. 如何高效检索长期记忆？
 

@@ -1,0 +1,65 @@
+---
+/**
+ * Renders ```mermaid code blocks as diagrams in the browser.
+ *
+ * Shiki has already turned each block into <pre data-language="mermaid">; its
+ * text content is the diagram source. The mermaid library is loaded only on
+ * pages that contain such a block, and diagrams are redrawn when the reader
+ * switches between light and dark themes. If rendering fails, the code block
+ * stays as it is, so the source is never lost.
+ */
+---
+
+<script>
+  const blocks = [...document.querySelectorAll<HTMLPreElement>('.prose pre[data-language="mermaid"]')];
+
+  if (blocks.length > 0) {
+    const { default: mermaid } = await import('mermaid');
+    const sources = blocks.map((pre) => pre.textContent ?? '');
+    const figures = blocks.map((pre) => {
+      const figure = document.createElement('figure');
+      figure.className = 'mermaid-diagram';
+      figure.hidden = true;
+      pre.after(figure);
+      return figure;
+    });
+
+    let run = 0;
+    const render = async () => {
+      const current = ++run;
+      const dark = document.documentElement.dataset.theme === 'dark';
+      mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'default', securityLevel: 'strict' });
+      for (const [i, pre] of blocks.entries()) {
+        try {
+          const { svg } = await mermaid.render(`mermaid-${i}-${current}`, sources[i]);
+          if (current !== run) return; // a newer theme switch took over
+          figures[i].innerHTML = svg;
+          figures[i].hidden = false;
+          pre.hidden = true;
+        } catch (error) {
+          console.error('Mermaid diagram could not be rendered', error);
+          figures[i].hidden = true;
+          pre.hidden = false;
+        }
+      }
+    };
+
+    await render();
+    new MutationObserver(() => void render()).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+  }
+</script>
+
+<style is:global>
+  .prose figure.mermaid-diagram {
+    margin: 1.5em 0;
+    overflow-x: auto;
+    text-align: center;
+  }
+  .prose figure.mermaid-diagram svg {
+    max-width: 100%;
+    height: auto;
+  }
+</style>

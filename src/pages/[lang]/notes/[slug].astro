@@ -12,6 +12,7 @@ import { topicLabel } from '../../../lib/topics.ts';
 import GraphView from '../../../components/GraphView.astro';
 import TopicChips from '../../../components/TopicChips.astro';
 import ConceptLayer from '../../../components/ConceptLayer.astro';
+import MermaidDiagrams from '../../../components/MermaidDiagrams.astro';
 
 export async function getStaticPaths() {
   // One page per logical note and language (ids come from the Chinese source).
@@ -309,4 +310,5 @@ const fmt = (d: string) => formatDisplayDate(d, locale);
   </section>
 
   {usedConcepts.length > 0 && <ConceptLayer lang={lang} concepts={usedConcepts} />}
+  <MermaidDiagrams />
 </BaseLayout>
