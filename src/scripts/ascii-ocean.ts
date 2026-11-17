@@ -15,13 +15,17 @@
 import { CreatureWorld } from './creatures/creatures.ts';
 import { CreatureRaster, readCreaturePalette, type CreaturePalette } from './creatures/raster.ts';
 import { DEFAULT_LINEUP } from './creatures/shapes.ts';
-import { FEED, mulberry32, OceanSim, SPECIES, type Ellipse } from './ocean-sim.ts';
+import { FEED, fishCountFor, mulberry32, OceanSim, type Ellipse } from './ocean-sim.ts';
+
+import { SchoolDensity } from './school-density.ts';
 
 interface Palette {
   ink: string;
   inkStrong: string;
   water: string;
   food: string;
+  ripple: string;
+  school: string;
 }
 
 interface Particle {
@@ -60,16 +64,9 @@ const smoothstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** Single-cell fish: level dash, tilting only when clearly climbing/diving (screen y points down). */
-function dashFor(vx: number, vy: number): string {
-  const a = Math.atan2(Math.abs(vy), Math.abs(vx));
-  if (a < 0.95) return '-';
-  return vx * vy > 0 ? '\\' : '/';
-}
-
-/** Creature line-up for a viewport width: the full mix on desktop, three on phones. */
-function lineupFor(width: number) {
-  return width < 640 ? DEFAULT_LINEUP.slice(0, 3) : DEFAULT_LINEUP;
+/** Creature line-up for a viewport width: the full species mix at every breakpoint. */
+function lineupFor() {
+  return DEFAULT_LINEUP;
 }
 
 export class AsciiOcean {
@@ -91,6 +88,8 @@ export class AsciiOcean {
   private world = new CreatureWorld();
   private raster = new CreatureRaster();
   private seededWidth = 0;
+  private schoolDensity = new SchoolDensity(0);
+  private schoolCells = new Int32Array(12);
   private particles: Particle[] = [];
   private ripples: Ripple[] = [];
   private time = 0;
@@ -128,6 +127,8 @@ export class AsciiOcean {
       inkStrong: v('--ocean-ink-strong'),
       water: v('--ocean-water'),
       food: v('--ocean-accent-2'),
+      ripple: v('--ocean-ripple'),
+      school: v('--ocean-school'),
     };
     this.creaturePalette = readCreaturePalette(this.host);
     if (!this.running) this.draw();
@@ -156,7 +157,9 @@ export class AsciiOcean {
     this.glyph = new Array(n).fill('');
     this.glyphAlpha = new Float32Array(n);
     this.glyphColor = new Uint8Array(n);
-    this.raster.resize(this.cols, this.rows, this.cw, this.ch);
+    // Large silhouettes have their own fine grid; school spacing stays unchanged.
+    const creatureCell = W < 640 ? 5 : 7;
+    this.raster.resize(Math.ceil(W / creatureCell), Math.ceil(H / (creatureCell * 1.5)), creatureCell, creatureCell * 1.5);
 
     if (this.avoidEl) {
       const a = this.avoidEl.getBoundingClientRect();
@@ -180,15 +183,18 @@ export class AsciiOcean {
     if (this.sim) {
       this.sim.resize(W, H, this.cw, this.avoid, this.ch);
     } else {
-      this.sim = new OceanSim({ width: W, height: H, cell: this.cw, cellH: this.ch, rng: mulberry32(this.seed), avoid: this.avoid });
+      this.sim = new OceanSim({ width: W, height: H, cell: this.cw, cellH: this.ch, rng: mulberry32(this.seed), avoid: this.avoid, count: Math.round(fishCountFor(W,H)*3.45) });
+      this.schoolDensity = new SchoolDensity(this.sim.fish.length);
+      // Keep the original simultaneous feeding limit despite the larger display reserve.
+      this.sim.maxChasers = Math.max(3,Math.min(FEED.maxChasers,Math.round(fishCountFor(W,H)/40)));
       this.sim.step(3); // let schools form before the first frame
     }
 
     // Big creatures: seed once (or when the layout class changes), then settle.
     this.world.avoid = this.avoid;
     if (!this.seededWidth || (this.seededWidth < 640) !== (W < 640)) {
-      this.world.seed(lineupFor(W), W, H);
-      for (let i = 0; i < 240; i++) this.world.step(STEP);
+      this.world.seed(lineupFor(), W, H);
+      for (let i = 0; i < 30; i++) this.world.step(STEP);
       this.seededWidth = W;
     } else {
       this.world.resize(W, H);
@@ -240,6 +246,7 @@ export class AsciiOcean {
     if (reduced) {
       this.stop();
       this.ripples = [];
+      for (const c of this.world.creatures) { c.target = -1; c.mode = 'cruise'; }
       if (this.sim) {
         this.sim.pellets = [];
         this.sim.crumbs = [];
@@ -257,7 +264,7 @@ export class AsciiOcean {
     const y = clientY - rect.top;
     if (Math.hypot(x - this.lastRipple.x, y - this.lastRipple.y) < this.cw * 4 && this.time - this.lastRipple.t < 0.6) return;
     this.lastRipple = { x, y, t: this.time };
-    this.ripples.push({ x, y, t0: this.time, strength: 0.35 });
+    this.ripples.push({ x, y, t0: this.time, strength: 0.65 });
     if (this.ripples.length > 8) this.ripples.shift();
   }
 
@@ -268,7 +275,7 @@ export class AsciiOcean {
     const x = clientX - rect.left;
     const y = clientY - rect.top;
     this.sim.feed(x, y);
-    this.ripples.push({ x, y, t0: this.time, strength: 0.6 });
+    this.ripples.push({ x, y, t0: this.time, strength: 0.8 });
     if (!this.running) this.draw();
     return true;
   }
@@ -290,20 +297,27 @@ export class AsciiOcean {
     this.acc += dt;
     let steps = 0;
     while (this.acc >= STEP && steps < 6) {
-      this.world.step(STEP);
+      this.world.step(STEP, this.sim!.pellets, this.sim!.time);
+      this.sim!.step(STEP);
       this.acc -= STEP;
       steps++;
     }
     if (steps === 6) this.acc = 0;
 
     const sim = this.sim!;
+    this.schoolDensity.step(dt,this.world.visibleCount,sim.fish);
     // Small fish give the big creatures room (points along each spine).
-    sim.obstacles = [];
+    let obstacleIndex = 0;
     for (const c of this.world.creatures) {
+      if (!c.active) continue;
       const r = c.length * (c.kind === 'manta' ? 0.34 : c.kind === 'sunfish' ? 0.3 : 0.18) + 18;
-      for (let k = 0; k <= 12; k += 4) sim.obstacles.push({ x: c.nodes[k * 2], y: c.nodes[k * 2 + 1], r });
+      for (let k = 0; k <= 12; k += 4) {
+        const ob = sim.obstacles[obstacleIndex] ?? (sim.obstacles[obstacleIndex] = { x: 0, y: 0, r: 0 });
+        ob.x = c.nodes[k * 2]; ob.y = c.nodes[k * 2 + 1]; ob.r = r;
+        obstacleIndex++;
+      }
     }
-    sim.step(dt);
+    sim.obstacles.length = obstacleIndex;
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -330,7 +344,7 @@ export class AsciiOcean {
 
   /** Claim a free cell for the small-glyph layer. */
   private put(i: number, ch: string, alpha: number, color: number, overCreatures = false): boolean {
-    if (this.glyph[i] || (!overCreatures && this.raster.occupied(i))) return false;
+    if (this.glyph[i] || (!overCreatures && this.raster.occupied(Math.floor(((i / this.cols | 0) + .5) * this.ch / this.raster.ch) * this.raster.cols + Math.floor((i % this.cols + .5) * this.cw / this.raster.cw)))) return false;
     this.glyph[i] = ch;
     this.glyphAlpha[i] = alpha;
     this.glyphColor[i] = color;
@@ -350,13 +364,16 @@ export class AsciiOcean {
     const n = cols * rows;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.width, this.height);
-    ctx.font = `600 ${Math.round(ch * 0.74)}px "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+    ctx.font = `400 ${Math.round(ch * 0.74)}px "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     // 1. Big creatures.
-    this.raster.rasterize(this.world.creatures, (c, r) => this.clearing(c, r));
+    ctx.font = `400 ${this.raster.ch * .88}px "JetBrains Mono", Consolas, monospace`;
+    this.raster.rasterize(this.world.creatures, (c, r) => this.clearing((c + .5) * this.raster.cw / cw - .5, (r + .5) * this.raster.ch / ch - .5));
     this.raster.draw(ctx, this.creaturePalette, this.time);
+    this.world.observeVisibility(this.raster.visibleCells, this.raster.leftCells, this.raster.rightCells);
+    ctx.font = `400 ${Math.round(ch * .74)}px "JetBrains Mono", Consolas, monospace`;
 
     this.glyph.fill('');
     this.glyphAlpha.fill(0);
@@ -379,31 +396,39 @@ export class AsciiOcean {
       }
     }
 
-    // 3. Small fish schools (nearer fish claim a cell first).
-    const order = sim.fish;
-    for (let pass = 0; pass < 2; pass++) {
-      for (const f of order) {
-        if ((f.depth > 0.75 ? 0 : 1) !== pass) continue;
-        const c = Math.floor(f.x / cw);
-        const r = Math.floor(f.y / ch);
-        if (r < 0 || r >= rows) continue;
-        const sp = SPECIES[f.species];
-        const fade = this.clearing(c, r);
-        if (fade <= 0.02) continue;
-        const alpha = (0.4 + 0.6 * f.depth + (f.target >= 0 ? 0.15 : 0)) * fade;
-        if (!sp.shape) {
-          if (c >= 0 && c < cols) this.put(r * cols + c, dashFor(f.vx, f.vy), alpha, sp.tone);
-          continue;
-        }
-        const right = f.vx >= 0;
-        const text = right ? sp.shape.right : sp.shape.left;
-        for (let k = 0; k < text.length; k++) {
-          const cc = right ? c - (text.length - 1 - k) : c + k;
-          if (cc < 0 || cc >= cols) continue;
-          this.put(r * cols + cc, text[k], alpha, sp.tone);
-        }
+    // 3. A school member is one sprite / one simulation entity. In particular,
+    // "--" is measured, claimed and drawn atomically, never as two particles.
+    this.schoolCells.fill(0);
+    const unit = ctx.measureText('-').width;
+    ctx.fillStyle = palette.school;
+    for (let fi=0;fi<sim.fish.length;fi++) {
+      const f = sim.fish[fi];
+      const presence = this.schoolDensity.alpha[fi];
+      if (presence < .02) continue;
+      const r = Math.floor(f.y / ch);
+      const half = unit * f.glyph.length / 2;
+      const c0 = Math.floor((f.x-half)/cw), c1 = Math.floor((f.x+half)/cw);
+      if (r<0 || r>=rows || c0<0 || c1>=cols) continue;
+      let free = true, fade = 1;
+      for(let c=c0;c<=c1;c++) {
+        fade = Math.min(fade,this.clearing(c,r));
+        if(this.glyph[r*cols+c]) { free=false; break; }
+      }
+      // Test the full sprite footprint against the large-fish raster.
+      for(let rr=Math.max(0,Math.floor((f.y-ch*.35)/this.raster.ch));free && rr<=Math.min(this.raster.rows-1,Math.floor((f.y+ch*.35)/this.raster.ch));rr++)
+        for(let cc=Math.max(0,Math.floor((f.x-half)/this.raster.cw));cc<=Math.min(this.raster.cols-1,Math.floor((f.x+half)/this.raster.cw));cc++)
+          if(this.raster.occupied(rr*this.raster.cols+cc)) {free=false;break;}
+      if(!free || fade<.03)continue;
+      for(let c=c0;c<=c1;c++)this.glyph[r*cols+c]='\0';
+      ctx.globalAlpha = (.32 + .24*f.depth + (f.target>=0?.04:0))*fade*presence;
+      ctx.fillText(f.glyph,f.x,f.y+1);
+      if(ctx.globalAlpha>=.12 && f.x>=0 && f.x<this.width && f.y>=0 && f.y<this.height) {
+        const region=Math.floor(f.x/this.width*4)+4*Math.floor(f.y/this.height*3);
+        this.schoolCells[region]++;
       }
     }
+
+    sim.observeSchoolCoverage(this.schoolCells,this.schoolDensity.alpha);
 
     // 4. Ripples and plankton.
     for (const rp of this.ripples) {
@@ -415,7 +440,7 @@ export class AsciiOcean {
         const ang = (s / steps) * Math.PI * 2;
         const i = this.cellIndex(rp.x + Math.cos(ang) * radius * cw * 1.3, rp.y + Math.sin(ang) * radius * ch * 0.6);
         if (i < 0) continue;
-        this.put(i, Math.abs(Math.sin(ang)) < 0.5 ? '~' : '·', rp.strength * fadeOut * this.clearing(i % cols, (i / cols) | 0), WATER);
+        this.put(i, Math.abs(Math.sin(ang)) < 0.5 ? '~' : '·', rp.strength * fadeOut * this.clearing(i % cols, (i / cols) | 0), 4);
       }
     }
     for (const p of this.particles) {
@@ -427,12 +452,12 @@ export class AsciiOcean {
       this.put(i, PLANKTON[Math.floor(hash3(c, r, 3) * PLANKTON.length)], 0.3 * tw * this.clearing(c, r), WATER);
     }
 
-    const glyphColors = [palette.water, palette.ink, palette.inkStrong, palette.food];
+    const glyphColors = [palette.water, palette.ink, palette.inkStrong, palette.food, palette.ripple];
     for (let color = 0; color < glyphColors.length; color++) {
       ctx.fillStyle = glyphColors[color];
       for (let i = 0; i < n; i++) {
         const g = this.glyph[i];
-        if (!g || this.glyphColor[i] !== color) continue;
+        if (!g || g === '\0' || this.glyphColor[i] !== color) continue;
         const a = this.glyphAlpha[i];
         if (a <= 0.01) continue;
         ctx.globalAlpha = Math.min(1, a);

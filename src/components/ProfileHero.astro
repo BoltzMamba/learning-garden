@@ -84,9 +84,9 @@ const t = useTranslations(lang);
     pointer-events: none;
     background: radial-gradient(
       ellipse min(46rem, 92vw) min(26rem, 62svh) at 50% 50%,
-      var(--bg) 0%,
-      color-mix(in srgb, var(--bg) 82%, transparent) 38%,
-      color-mix(in srgb, var(--bg) 35%, transparent) 64%,
+      color-mix(in srgb, var(--bg) 88%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 55%, transparent) 38%,
+      color-mix(in srgb, var(--bg) 12%, transparent) 64%,
       transparent 80%
     );
   }
@@ -108,6 +108,10 @@ const t = useTranslations(lang);
     align-items: center;
     text-align: center;
     max-width: 36rem;
+  }
+  @media (max-width: 639px) {
+    .ocean-hero { min-height: max(100svh, 1040px); }
+    .ocean-clearing { background: none; }
   }
   .hero-avatar {
     width: 6rem;

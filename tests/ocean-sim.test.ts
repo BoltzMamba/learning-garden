@@ -15,12 +15,17 @@ const run = (sim: OceanSim, seconds: number) => {
 
 describe('ocean simulation', () => {
   test('fish count scales with area and stays bounded on mobile', () => {
-    assert.equal(fishCountFor(1440, 900), 295);
-    assert.equal(fishCountFor(375, 700), 60);
-    assert.equal(fishCountFor(600, 2000), 90);
-    assert.equal(fishCountFor(3840, 2160), 320);
+    assert.equal(fishCountFor(1440, 900), 118);
+    assert.equal(fishCountFor(375, 700), 24);
+    assert.equal(fishCountFor(600, 2000), 38);
+    assert.equal(fishCountFor(3840, 2160), 140);
     const sim = make();
-    assert.equal(sim.fish.length, 295);
+    assert.equal(sim.fish.length, 118);
+    assert.ok(sim.fish.every(f=>['-','--','='].includes(f.glyph)));
+    assert.ok(sim.fish.filter(f=>f.glyph==='--').length>sim.fish.length*.5);
+    assert.ok(sim.fish.filter(f=>f.glyph==='=').length<sim.fish.length*.12);
+    sim.feed(100,100);const firstBatch=sim.pellets[0].batch;
+    sim.feed(200,100);assert.notEqual(sim.pellets.at(-1)?.batch,firstBatch);
     const species = new Set(sim.fish.map((f) => f.species));
     assert.ok(species.size >= 3, `expected several species, got ${species.size}`);
   });

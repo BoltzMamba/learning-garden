@@ -63,6 +63,8 @@ export interface SmallFish {
   /** 0 = far/faint … 1 = near/bold. */
   depth: number;
   wander: number;
+  course: number;
+  glyph: '-' | '--' | '=';
   /** Pellet id being pursued, or -1. */
   target: number;
   noticeAt: number;
@@ -73,6 +75,8 @@ export interface SmallFish {
 
 export interface Pellet {
   id: number;
+  /** One user click, shared by all pellets from that click. */
+  batch?: number;
   x: number;
   y: number;
   vy: number;
@@ -136,8 +140,8 @@ export interface SimOptions {
 }
 
 export function fishCountFor(width: number, height: number): number {
-  const cap = width < 640 ? 90 : 320;
-  return Math.max(60, Math.min(cap, Math.round((width * height) / 4400)));
+  const cap = width < 640 ? 38 : 140;
+  return Math.max(24, Math.min(cap, Math.round((width * height) / 11000)));
 }
 
 export class OceanSim {
@@ -154,7 +158,15 @@ export class OceanSim {
   obstacles: Obstacle[] = [];
   /** Chasers allowed per pellet, scaled to the population (smaller on mobile). */
   maxChasers: number = FEED.maxChasers;
+  /** Render feedback, after clipping, masking and density fading. */
+  readonly coverage = { counts: new Int32Array(12), quiet: new Float32Array(12),
+    reservedUntil: new Float32Array(12), recycled: 0 };
+  private coverageReady = false;
+  private coverageAt = 0;
+  private nextSchoolEntry = 0;
+  private schoolPresence: Float32Array | undefined;
   private nextPellet = 1;
+  private nextBatch = 1;
   private perception: number;
   private bucketCols = 0;
   private bucketRows = 0;
@@ -198,17 +210,26 @@ export class OceanSim {
   seed(count: number) {
     this.fish = [];
     let guard = 0;
+    // Stratified school centres: visit each region before reusing one, with
+    // jitter inside it. Only spawning changes; swimming and feeding stay intact.
+    const regions = Array.from({length:12},(_,i)=>i);
+    for(let i=regions.length-1;i>0;i--) {
+      const j=Math.floor(this.rng()*(i+1));
+      [regions[i],regions[j]]=[regions[j],regions[i]];
+    }
     while (this.fish.length < count && guard++ < 500) {
       const s = this.pickSpecies();
       const sp = SPECIES[s];
       // Smaller populations (mobile) get smaller schools, so several species still appear.
-      const cap = Math.max(4, Math.ceil(count / 6));
+      const cap = Math.max(3, Math.ceil(count / 18));
       const size = Math.min(Math.round(this.range(sp.school[0], sp.school[1] + 1)), cap, count - this.fish.length);
       let cx = 0;
       let cy = 0;
       for (let tries = 0; tries < 20; tries++) {
-        cx = this.range(this.width * 0.04, this.width * 0.96);
-        cy = this.range(this.height * 0.06, this.height * 0.94);
+        const region = regions[(guard-1)%regions.length];
+        // Fall back when a tile is almost entirely covered by the profile.
+        cx = tries<10 ? this.width*((region%4)+this.range(.15,.85))/4 : this.range(this.width*.04,this.width*.96);
+        cy = tries<10 ? this.height*(Math.floor(region/4)+this.range(.15,.85))/3 : this.range(this.height*.06,this.height*.94);
         if (this.avoidDistance(cx, cy) > 1.3) break;
       }
       const heading = (this.rng() < 0.5 ? 0 : Math.PI) + this.range(-0.4, 0.4);
@@ -222,6 +243,8 @@ export class OceanSim {
           vx: Math.cos(heading) * speed,
           vy: Math.sin(heading) * speed,
           species: s,
+          course: heading,
+          glyph: this.fish.length % 11 === 0 ? '=' : i % 3 === 0 ? '-' : '--',
           depth: this.range(0.35, 1),
           wander: this.range(-1, 1),
           target: -1,
@@ -237,6 +260,7 @@ export class OceanSim {
   }
 
   resize(width: number, height: number, cell: number, avoid?: Ellipse, cellH = cell) {
+    this.coverage.quiet.fill(0);this.coverage.reservedUntil.fill(0);this.coverageReady=false;
     const sx = width / (this.width || width);
     const sy = height / (this.height || height);
     this.width = width;
@@ -257,11 +281,13 @@ export class OceanSim {
 
   /** Drop a few pellets at (x, y). Returns the number created. */
   feed(x: number, y: number): number {
+    const batch = this.nextBatch++;
     const [lo, hi] = FEED.perClick;
     const n = lo + Math.floor(this.rng() * (hi - lo + 1));
     for (let i = 0; i < n; i++) {
       this.pellets.push({
         id: this.nextPellet++,
+        batch,
         x: x + this.range(-1, 1) * this.cell * 0.9,
         y: y + this.range(-0.6, 0.6) * this.cell,
         vy: this.range(5, 11),
@@ -272,6 +298,71 @@ export class OceanSim {
     }
     while (this.pellets.length > FEED.maxPellets) this.pellets.shift();
     return n;
+  }
+
+  observeSchoolCoverage(counts: Int32Array, presence: Float32Array) {
+    this.coverage.counts.set(counts);
+    this.schoolPresence = presence;
+    this.coverageReady = true;
+  }
+
+  /** Re-route only fully departed fish. Never move an on-screen or feeding fish. */
+  private replenishQuietRegions() {
+    if (!this.coverageReady || this.time < this.coverageAt) return;
+    const elapsed = Math.min(1.5,this.time-this.coverageAt+1);
+    this.coverageAt = this.time+1;
+    const {counts,quiet,reservedUntil}=this.coverage;
+    let total=0;for(const n of counts)total+=n;
+    const floor=Math.max(3,Math.min(6,total/12*.28));
+    let region=-1,priority=0;
+    for(let k=0;k<12;k++) {
+      quiet[k]=counts[k]<floor ? quiet[k]+elapsed : Math.max(0,quiet[k]-elapsed*2);
+      const x=((k%4)+.5)*this.width/4,y=(Math.floor(k/4)+.5)*this.height/3;
+      // Do not try to fill the intentional profile clearing.
+      if(this.avoidDistance(x,y)<1.2)continue;
+      if(quiet[k]>=3 && this.time>=reservedUntil[k] && quiet[k]>priority){region=k;priority=quiet[k];}
+    }
+    if(region<0 || this.time<this.nextSchoolEntry)return;
+    const col=region%4,row=Math.floor(region/4),margin=this.cell*2;
+    let species=-1,moved=0;
+    let centreX=(col+.5)*this.width/4,centreY=(row+.5)*this.height/3;
+    // A large fish may cover the tile centre but leave its edge lane open.
+    // Pick a clear lane inside the same tile instead of abandoning the whole tile.
+    let bestClearance=-Infinity;
+    for(const fraction of [.25,.5,.75]) {
+      const x=col===0||col===3 ? centreX : (col+fraction)*this.width/4;
+      const y=col===0||col===3 ? (row+fraction)*this.height/3 : centreY;
+      let clearance=Math.min(2,this.avoidDistance(x,y));
+      for(const ob of this.obstacles)clearance=Math.min(clearance,Math.hypot(x-ob.x,y-ob.y)/ob.r);
+      if(clearance>bestClearance){bestClearance=clearance;centreX=x;centreY=y;}
+    }
+    for(let i=0;i<this.fish.length && moved<7;i++) {
+      const f=this.fish[i];
+      if(f.target>=0 || (this.schoolPresence?.[i]??1)<.65)continue;
+      const leaving=(f.x < -margin && f.vx<0)||(f.x>this.width+margin && f.vx>0)||
+        (f.y < -margin && f.vy<0)||(f.y>this.height+margin && f.vy>0);
+      if(!leaving || (species>=0 && f.species!==species))continue;
+      species=f.species;
+      const offset=(moved-3)*this.cellH*.8;
+      const stagger=margin+this.cell*(moved%3)*.6;
+      let heading=0;
+      if(col===0 || col===3) {
+        f.x=col===0 ? -stagger : this.width+stagger;
+        f.y=centreY+offset;heading=col===0 ? 0 : Math.PI;
+      } else {
+        f.x=centreX+offset;f.y=row===0 ? -stagger : this.height+stagger;
+        heading=row===0 ? Math.PI/2 : -Math.PI/2;
+      }
+      // Changes of course occur outside the viewport; retain normal speed limits.
+      f.course=heading;f.vx=Math.cos(heading)*SPECIES[species].cruise;
+      f.vy=Math.sin(heading)*SPECIES[species].cruise;f.wander=0;
+      moved++;
+    }
+    if(moved) {
+      this.coverage.recycled+=moved;
+      reservedUntil[region]=this.time+(moved<3 ? 3 : 7); // Wait for the incoming group before scheduling another.
+      this.nextSchoolEntry=this.time+2.5;
+    }
   }
 
   private pellet(id: number): Pellet | undefined {
@@ -312,6 +403,7 @@ export class OceanSim {
   private stepOnce(dt: number) {
     this.time += dt;
     const t = this.time;
+    this.replenishQuietRegions();
     this.rebuildHash();
 
     // Pellets sink and wobble; dissolve when eaten or old.
@@ -430,6 +522,11 @@ export class OceanSim {
       const side = (f.wander * 0.35 + (this.rng() - 0.5) * 0.6) * sp.jitter * social;
       ax += -hy * side;
       ay += hx * side;
+      // Persistent school migration restores forward progress after feeding.
+      if (!food) {
+        ax += (Math.cos(f.course) * sp.cruise - f.vx) * .7;
+        ay += (Math.sin(f.course) * sp.cruise - f.vy) * .7;
+      }
       // Fish prefer level swimming; while seeking they still arc in mostly sideways.
       ay -= f.vy * sp.verticalDrag * (food ? 0.5 : 1);
 

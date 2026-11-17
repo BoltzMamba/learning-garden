@@ -35,6 +35,31 @@ function render(kind: CreatureKind, length = L, y = 510) {
 const spineRow = 510 / CH;
 
 describe('creature body plans', () => {
+  test('a stationary silhouette has no clock-driven sparkle or solid cell backgrounds', () => {
+    const world = new CreatureWorld();
+    const raster = new CreatureRaster();
+    raster.resize(COLS, ROWS, CW, CH);
+    raster.rasterize([world.make(1, 'whaleshark', L, 820, 510, 0)]);
+    const calls: unknown[] = [];
+    const ctx = {
+      globalAlpha: 1, fillStyle: '',
+      fillText(g: string, x: number, y: number) { calls.push([g, x, y, this.globalAlpha, this.fillStyle]); },
+      fillRect() { assert.fail('solid blocks overwhelm the character silhouette'); },
+    };
+    const palette = {
+      bg: [247, 248, 245], shadow: [80, 100, 95], light: [180, 200, 190],
+      edge: [72, 108, 101], glyphOnLight: '#456', glyphOnDark: '#abc',
+      eye: '#294d46', accents: ['#789'], glint: '#fff', tintStrength: .2,
+    } as import('../src/scripts/creatures/raster.ts').CreaturePalette;
+    raster.draw(ctx as unknown as CanvasRenderingContext2D, palette, 0);
+    const first = [...calls]; calls.length = 0;
+    raster.draw(ctx as unknown as CanvasRenderingContext2D, palette, 17);
+    assert.ok(first.length > 90);
+    assert.deepEqual(calls, first);
+    const glyphs = first.map(call => (call as unknown[])[0]);
+    assert.ok(glyphs.every(g => typeof g === 'string' && '01/\\|-.:+'.includes(g)), 'unexpected non-binary alphabet');
+    assert.ok(glyphs.filter(g => g === '0' || g === '1').length / glyphs.length > .55, 'binary should dominate the silhouette');
+  });
   test('every species is a dense character silhouette with eyes (any grid alignment)', () => {
     for (const kind of KINDS) for (const y of [510, 514, 518]) {
       const cells = render(kind, L, y);

@@ -52,6 +52,8 @@ export interface SharkShape {
   pelvic: [number, number, number, number];
   /** Forked caudal fin reach, or 0 for a ribbon tail. */
   caudal: number;
+  /** Lower lobe reach relative to the upper lobe (default .68). */
+  caudalLower?: number;
   dorsal: [number, number];
   secondDorsal: [number, number];
   /** Hammerhead cephalofoil (fractions of L). */
@@ -290,6 +292,7 @@ export const SHAPES: Record<CreatureKind, CreatureShape> = {
     falcate: true,
     pelvic: [0.58, 0.64, 0.68, 0.06],
     caudal: 0.13,
+    caudalLower: .86,
     dorsal: [0.34, 0.45],
     secondDorsal: [0.76, 0.79],
     eye: [0.11, 0.15],
@@ -350,6 +353,7 @@ export const SHAPES: Record<CreatureKind, CreatureShape> = {
     falcate: true,
     pelvic: [0.6, 0.66, 0.7, 0.06],
     caudal: 0.15,
+    caudalLower: .74,
     dorsal: [0.42, 0.53],
     secondDorsal: [0.74, 0.77],
     eye: [0.035, 0.065],

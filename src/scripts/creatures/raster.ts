@@ -1,7 +1,7 @@
 /**
  * Rasterises big creatures into a character grid: every cell in a creature's
  * bounding box is supersampled against the species body plan; fully covered
- * cells become shaded skin (a grey block + a glyph from a density ramp),
+ * cells become shaded skin (a glyph from a density ramp),
  * partially covered cells become light edge glyphs.
  *
  * Adapted from ascii-sharks/src/renderer.ts (sampleShark, rasterizeSharks,
@@ -26,19 +26,9 @@ export const FLAG_WHIP = 8;
 export const FLAG_SPOT = 9;
 export const FLAG_MOUTH = 10;
 
-// Sparse glyphs on bright skin, dense glyphs in shadow.
-const SKIN_RAMP = ':;t%SX8#@';
-const FIN_GLYPHS = '%;tS:';
-const RIDGE_GLYPHS = '@8%';
-const MARK_GLYPHS = '#%@';
-const PALE_GLYPHS = 'o:;.';
-const SPOT_GLYPHS = 'o°o.:';
-const EDGE_HEAVY = ':;';
-const EDGE_LIGHT = ".',`";
+// A restrained engraving ramp: density describes volume, never random sparkle.
 const WHIP_GLYPHS = ['-', '\\', '|', '/'];
-
-// Sub-cell sample offsets for anti-aliased silhouettes.
-const SUBSAMPLES = [0.25, 0.3, 0.75, 0.3, 0.25, 0.72, 0.75, 0.72];
+const SUBSAMPLES = [1/6,1/6, .5,1/6, 5/6,1/6, 1/6,.5, 5/6,.5, 1/6,5/6, .5,5/6, 5/6,5/6];
 
 type RGB = [number, number, number];
 
@@ -88,11 +78,10 @@ export function readCreaturePalette(el: Element): CreaturePalette {
     eye: v('--creature-eye') || '#9aa0ad',
     accents: (v('--creature-accents') || '#e0892c #b44ae0 #33c8cc #3cb54a #3150e8').split(/\s+/),
     glint: v('--creature-glint') || '#ffffff',
-    tintStrength: Number(v('--creature-tint')) || 1,
+    tintStrength: v('--creature-tint') === '' ? 1 : Number(v('--creature-tint')),
   };
 }
 
-const mixRGB = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const css = (c: RGB) => `rgb(${Math.round(clamp(c[0], 0, 255))},${Math.round(clamp(c[1], 0, 255))},${Math.round(clamp(c[2], 0, 255))})`;
 
 export class CreatureRaster {
@@ -102,6 +91,10 @@ export class CreatureRaster {
   ch = 17;
 
   flag = new Uint8Array(0);
+  owner = new Uint16Array(0);
+  visibleCells = new Int32Array(64);
+  leftCells = new Int32Array(64);
+  rightCells = new Int32Array(64);
   shade = new Float32Array(0);
   key = new Uint32Array(0);
   depth = new Float32Array(0);
@@ -124,6 +117,8 @@ export class CreatureRaster {
   private hitS = 0;
   private hitV = 0;
   private hitDist = 0;
+  private hitTx = 1;
+  private hitTy = 0;
 
   resize(cols: number, rows: number, cw: number, ch: number) {
     this.cw = cw;
@@ -133,6 +128,7 @@ export class CreatureRaster {
     this.rows = rows;
     const n = cols * rows;
     this.flag = new Uint8Array(n);
+    this.owner = new Uint16Array(n);
     this.shade = new Float32Array(n);
     this.key = new Uint32Array(n);
     this.depth = new Float32Array(n);
@@ -175,9 +171,23 @@ export class CreatureRaster {
         bestSign = sx * (py - ay) - sy * (px - ax) >= 0 ? 1 : -1;
         bestNx = (-sy / len) * bestSign;
         bestNy = (sx / len) * bestSign;
+        this.hitTx = sx / len;
+        this.hitTy = sy / len;
       }
     }
-    const a = Math.sqrt(best);
+    let a = Math.sqrt(best);
+    // A clamped endpoint is radial distance, NOT a tail cross-section. Keep
+    // longitudinal overshoot so a fin tip cannot sweep out a circular cap.
+    if (this.shape.plan === 'shark' && bestS >= 1 - 1e-5) {
+      const ex = px-spine[(SPINE_NODES-1)*2];
+      const ey = py-spine[(SPINE_NODES-1)*2+1];
+      const beyond = ex*this.hitTx + ey*this.hitTy;
+      if (beyond > 0) {
+        bestS = 1 + beyond/this.arcTotal;
+        const cross = this.hitTx*ey-this.hitTy*ex;
+        a = Math.abs(cross); bestSign = cross>=0 ? 1 : -1;
+      }
+    }
     this.hitDist = a;
     this.hitS = bestS;
     this.hitV = a * bestSign;
@@ -188,7 +198,19 @@ export class CreatureRaster {
   }
 
   private sampleShark(shape: SharkShape, s: number, a: number, sign: number, nx: number, ny: number, L: number) {
+    if (s < 0 || s > 1) return false;
     const u = s * L;
+    // Forked tails have two distinct lobes and an open trailing notch.
+    // Keep the existing body length and species-specific fin span.
+    if (shape.caudal > 0 && s >= .88) {
+      const upper = sign > 0;
+      const reach = L*shape.caudal*(upper ? 1 : shape.caudalLower ?? .68);
+      const tipS = upper ? 1 : .975;
+      if (!inTriangle(u,a,L*.84,0,L*.935,0,L*tipS,reach)) return false;
+      this.hitFlag = FLAG_FIN;
+      this.hitShade = (.36+.12*(1-a/reach))*shape.tone+(1-shape.tone)*.1;
+      return true;
+    }
     const w = shape.halfWidth(s) * L;
 
     const head = shape.head;
@@ -257,8 +279,7 @@ export class CreatureRaster {
     }
     const [v0, v1, v2, vr] = shape.pelvic;
     if (
-      inTriangle(u, a, L * v0, 0, L * v1, 0, L * v2, L * vr) ||
-      (shape.caudal > 0 && inTriangle(u, a, L * 0.86, 0, L * 0.95, 0, L, L * shape.caudal))
+      inTriangle(u, a, L * v0, 0, L * v1, 0, L * v2, L * vr)
     ) {
       this.hitFlag = FLAG_FIN;
       this.hitShade = 0.36 * shape.tone + (1 - shape.tone) * 0.1;
@@ -410,9 +431,11 @@ export class CreatureRaster {
   rasterize(creatures: Creature[], fadeAt?: (c: number, r: number) => number) {
     const { flag, shade: shadeBuf, key: keyBuf, depth: depthBuf, kind: kindBuf, angle: angleBuf, fade, spine, arc, cw, ch, cols, rows } = this;
     flag.fill(0);
+    this.owner.fill(0);
     const N = SPINE_NODES;
 
     for (const sh of creatures) {
+      if (!sh.active) continue;
       const L = sh.length;
       const n = sh.nodes;
       const shape = SHAPES[sh.kind];
@@ -433,7 +456,7 @@ export class CreatureRaster {
         const tl = Math.hypot(tx, ty) || 1;
         tx /= tl;
         ty /= tl;
-        const off = L * motion.wave(s) * swim * Math.sin(sh.phase - s * 5.2);
+        const off = L * motion.wave(s) * Math.min(1, s * 12) * swim * Math.sin(sh.phase - s * 5.2);
         spine[k * 2] = n[k * 2] - ty * off;
         spine[k * 2 + 1] = n[k * 2 + 1] + tx * off;
       }
@@ -483,18 +506,39 @@ export class CreatureRaster {
           if (!centerHit && this.hitDist > skipBeyond) continue;
           // The thin tail is drawn as a line below; skip its soft fringe here.
           if (whipFrom !== undefined && s > whipFrom && !centerHit) continue;
+          const spineIndex = Math.min(N - 2, Math.floor(s * (N - 1)));
+          const tangent = Math.atan2(spine[(spineIndex + 1) * 2 + 1] - spine[spineIndex * 2 + 1], spine[(spineIndex + 1) * 2] - spine[spineIndex * 2]);
           const hitFlag = this.hitFlag;
           const hitShade = this.hitShade;
 
+          // Project subpixels onto the centre's local tangent. The spine is
+          // smooth at this scale; avoid eight extra 19-segment nearest searches.
+          const tx = this.hitTx;
+          const ty = this.hitTy;
           let hits = centerHit ? 1 : 0;
           for (let k = 0; k < SUBSAMPLES.length; k += 2) {
-            if (this.sample(x + SUBSAMPLES[k] * cw, y + SUBSAMPLES[k + 1] * ch, L)) hits++;
+            const ox = (SUBSAMPLES[k] - .5) * cw;
+            const oy = (SUBSAMPLES[k + 1] - .5) * ch;
+            const projected = s + (ox * tx + oy * ty) / this.arcTotal;
+            const ss = shape.plan === 'shark' && s > .8 ? projected : clamp(projected,0,1);
+            const vv = v + tx * oy - ty * ox;
+            const sign = vv >= 0 ? 1 : -1;
+            const a = Math.abs(vv);
+            const hit = shape.plan === 'manta'
+              ? this.sampleManta(shape, ss, a, sign, -ty * sign, tx * sign, L)
+              : shape.plan === 'sunfish'
+                ? this.sampleSunfish(shape, ss, a, sign, L)
+                : this.sampleShark(shape, ss, a, sign, -ty * sign, tx * sign, L);
+            if (hit) hits++;
           }
           if (hits === 0) continue;
-          const coverage = hits / 5;
+          if (flag[i] && depthBuf[i] > sh.depth) continue;
+          const coverage = hits / 9;
 
           // Body-anchored key so each glyph rides along with the skin.
+          this.owner[i] = sh.id;
           keyBuf[i] = (hash3(Math.round(s * 52), Math.round(v / (cw * 0.9)), sh.id) * 4294967295) >>> 0;
+          angleBuf[i] = tangent;
           depthBuf[i] = sh.depth;
           kindBuf[i] = kindIndex;
           fade[i] = fadeAt ? fadeAt(c, r) : 1;
@@ -528,13 +572,16 @@ export class CreatureRaster {
             const r = Math.floor((ay + (dy * d) / len) / ch);
             if (c < 0 || r < 0 || c >= cols || r >= rows) continue;
             const i = r * cols + c;
+            // Keep the tail continuous, but never overwrite a nearer animal.
+            if (flag[i] && depthBuf[i] > sh.depth) continue;
             flag[i] = FLAG_WHIP;
+            this.owner[i] = sh.id;
             angleBuf[i] = ang;
             // Fades a little toward the tip.
             shadeBuf[i] = 1 - 0.6 * ((at / this.arcTotal - whipFrom) / (1 - whipFrom));
             depthBuf[i] = sh.depth;
             kindBuf[i] = kindIndex;
-            keyBuf[i] = (hash3(k, 0, sh.id) * 4294967295) >>> 0;
+            keyBuf[i] = (hash3(Math.round(at / this.arcTotal * 52), 0, sh.id) * 4294967295) >>> 0;
             fade[i] = fadeAt ? fadeAt(c, r) : 1;
           }
         }
@@ -544,85 +591,61 @@ export class CreatureRaster {
 
   // ── drawing ──────────────────────────────────────────────────────────
 
-  draw(ctx: CanvasRenderingContext2D, palette: CreaturePalette, t: number) {
-    const { cols, rows, cw, ch, flag, shade: shadeBuf, key: keyBuf, depth: depthBuf, kind: kindBuf, angle: angleBuf, fade } = this;
-    const n = cols * rows;
-    for (let i = 0; i < n; i++) {
+  draw(ctx: CanvasRenderingContext2D, palette: CreaturePalette, _t: number) {
+    const { cols, rows, cw, ch, flag, shade, depth, kind, angle, fade } = this;
+    // One palette per species per draw, not an RGB array + CSS string per cell.
+    this.visibleCells.fill(0); this.leftCells.fill(0); this.rightCells.fill(0);
+    const inks = KINDS.map(species => {
+      const raw = SHAPES[species].tint;
+      return css(palette.edge.map((v, k) => v * (1 + (raw[k] - 1) * palette.tintStrength)) as RGB);
+    });
+    for (let i = 0; i < cols * rows; i++) {
       const f = flag[i];
-      if (!f) continue;
-      const alpha = fade[i];
-      if (alpha <= 0.02) continue;
-      ctx.globalAlpha = alpha;
-      const x = (i % cols) * cw;
-      const y = ((i / cols) | 0) * ch;
-      const key = keyBuf[i];
-      const shade = shadeBuf[i];
-      const dim = 0.7 + 0.3 * depthBuf[i];
-      const raw = SHAPES[KINDS[kindBuf[i]]].tint;
-      const k = palette.tintStrength;
-      const tint = [1 + (raw[0] - 1) * k, 1 + (raw[1] - 1) * k, 1 + (raw[2] - 1) * k];
-      const tinted = (c: RGB): RGB => mixRGB(palette.bg, [c[0] * tint[0], c[1] * tint[1], c[2] * tint[2]], dim);
-
-      // Colours re-roll on a staggered clock so the hide shimmers.
-      const tick = Math.floor(t * 2.4 + (key % 997) / 97);
-      const roll = hash3(key, tick, 7);
-
-      if (f === FLAG_WHIP) {
-        const q = ((Math.round(angleBuf[i] / (Math.PI / 4)) % 4) + 4) % 4;
-        ctx.fillStyle = css(tinted(mixRGB(palette.edge, palette.shadow, 0.5 + 0.5 * shade)));
-        ctx.fillText(WHIP_GLYPHS[q], x + cw / 2, y + ch / 2 + 1);
-        continue;
-      }
-      if (f === FLAG_EDGE) {
-        const set = shade >= 0.5 ? EDGE_HEAVY : EDGE_LIGHT;
-        ctx.fillStyle =
-          roll < 0.06 ? palette.accents[key % palette.accents.length] : css(tinted(mixRGB(palette.bg, palette.edge, 0.55 + 0.45 * shade)));
-        ctx.fillText(set[(key >>> 8) % set.length], x + cw / 2, y + ch / 2 + 1);
-        continue;
-      }
-
-      let level: number;
+      if (!f || fade[i] <= 0.02) continue;
+      const x = (i % cols + .5) * cw;
+      const y = (Math.floor(i / cols) + .5) * ch + .5;
+      const value = shade[i];
+      const q = ((Math.round(angle[i] / (Math.PI / 4)) % 4) + 4) % 4;
+      const stroke = WHIP_GLYPHS[q];
+      const bit = this.key[i] / 4294967296;
       let glyph: string;
-      if (f === FLAG_RIDGE) {
-        level = 0.95;
-        glyph = RIDGE_GLYPHS[(key >>> 8) % RIDGE_GLYPHS.length];
+      let strength = .72;
+      if (f === FLAG_EDGE) {
+        // Partial coverage stays airy; only the thinnest fringe gets punctuation.
+        glyph = value < .23 && bit < .08 ? '.' : value < .56 ? '1' : bit < .28 ? '0' : '1';
+        strength = .28 + .65 * value;
+      } else if (f === FLAG_WHIP) {
+        glyph = bit < .05 ? stroke : bit < .20 ? '0' : '1';
+        strength = .55 + .3 * value;
       } else if (f === FLAG_EYE) {
-        level = 0;
-        glyph = 'o';
-      } else if (f === FLAG_MARK) {
-        level = 0.04 + shade * 0.1;
-        glyph = MARK_GLYPHS[(key >>> 8) % MARK_GLYPHS.length];
-      } else if (f === FLAG_PALE) {
-        level = 0.9;
-        glyph = PALE_GLYPHS[(key >>> 8) % PALE_GLYPHS.length];
-      } else if (f === FLAG_SPOT) {
-        level = 0.12 + shade * 0.22;
-        glyph = SPOT_GLYPHS[(key >>> 8) % SPOT_GLYPHS.length];
+        glyph = '0'; strength = 1;
       } else if (f === FLAG_MOUTH) {
-        level = 0;
-        glyph = '=';
+        glyph = bit < .12 ? '-' : '1'; strength = .95;
+      } else if (f === FLAG_SPOT) {
+        glyph = '0'; strength = .95;
+      } else if (f === FLAG_MARK) {
+        glyph = '1'; strength = .88;
+      } else if (f === FLAG_PALE) {
+        glyph = bit < .72 ? '0' : '1'; strength = .52;
+      } else if (f === FLAG_RIDGE) {
+        glyph = bit < .18 ? '0' : '1'; strength = .9;
       } else if (f === FLAG_FIN) {
-        level = 0.05 + shade * 0.6;
-        glyph = FIN_GLYPHS[(key >>> 8) % FIN_GLYPHS.length];
+        // Slender 1s expose fin rays without turning the entire fin into hatching.
+        glyph = bit < .16 + value*.18 ? '0' : '1'; strength = .48 + value * .4;
       } else {
-        level = 0.08 + shade * 0.78;
-        const jitter = ((key >>> 4) % 3) - 1;
-        glyph = SKIN_RAMP[clamp(Math.floor((1 - shade) * 8.99) + jitter, 0, SKIN_RAMP.length - 1)];
+        // Body-space hash (computed during rasterisation), never frame/time.
+        // A slight shade bias adds structure without literal repeating bit strings.
+        glyph = bit < .38 + value * .24 ? '0' : '1';
+        strength = .78 + .16 * (1 - value);
       }
-      const block = f === FLAG_EYE || f === FLAG_MOUTH ? mixRGB(palette.shadow, [0, 0, 0], 0.55) : mixRGB(palette.shadow, palette.light, level);
-      ctx.fillStyle = css(tinted(block));
-      ctx.fillRect(x + 1, y + 1, cw - 1, ch - 1);
-
-      let color: string;
-      if (f === FLAG_EYE) color = palette.eye;
-      else if (f === FLAG_SPOT) color = palette.glint;
-      else if (f === FLAG_MOUTH) color = palette.glyphOnDark;
-      else if (f === FLAG_MARK) color = palette.glyphOnDark;
-      else if (roll < 0.08) color = palette.accents[key % palette.accents.length];
-      else if (roll < 0.11) color = palette.glint;
-      else color = level > 0.45 ? palette.glyphOnLight : palette.glyphOnDark;
-      ctx.fillStyle = color;
-      ctx.fillText(glyph, x + cw / 2, y + ch / 2 + 1);
+      ctx.globalAlpha = fade[i] * (.48 + .52 * depth[i]) * strength;
+      ctx.fillStyle = f === FLAG_EYE ? palette.eye : inks[kind[i]];
+      ctx.fillText(glyph, x, y);
+      if (ctx.globalAlpha > .06) {
+        const id = this.owner[i];
+        this.visibleCells[id]++;
+        if (x < cols*cw/2) this.leftCells[id]++; else this.rightCells[id]++;
+      }
     }
     ctx.globalAlpha = 1;
   }
