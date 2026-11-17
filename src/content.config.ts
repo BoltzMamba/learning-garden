@@ -5,6 +5,7 @@ import { normalizeCalendarDate } from './lib/dates.ts';
 import { SLUG_RE } from './lib/slug.ts';
 import { LEGACY_CATEGORIES, SECTIONS, toSection } from './lib/sections.ts';
 import { CONTENT_TYPES } from './lib/content-model.ts';
+import { TRANSLATION_MODES } from './lib/translation.ts';
 
 /** `YYYY-MM-DD`; tolerates YAML auto-dates without timezone shifts. */
 const calendarDate = z.union([z.string(), z.date()]).transform((value, ctx) => {
@@ -50,6 +51,22 @@ const notes = defineCollection({
   }),
 });
 
+/**
+ * English editions of notes: same file name (= logical id) as the Chinese
+ * source, language only. Structure (section, tags, series, related, dates)
+ * always comes from src/content/notes. The translation block is checked in
+ * depth by src/lib/translation.ts (`npm run translate:check`); this schema only
+ * keeps the build from rendering something unusable.
+ */
+const notesEn = defineCollection({
+  loader: glob({ pattern: '*.md', base: './src/content/notes-en', generateId: idFromFileName }),
+  schema: z.object({
+    title: z.string().min(1),
+    description: z.string().min(1),
+    translation: z.looseObject({ mode: z.enum(TRANSLATION_MODES) }),
+  }),
+});
+
 const questions = defineCollection({
   loader: glob({ pattern: '*.md', base: './src/content/questions', generateId: idFromFileName }),
   schema: z
@@ -75,4 +92,4 @@ const questions = defineCollection({
     }),
 });
 
-export const collections = { notes, questions };
+export const collections = { notes, notesEn, questions };

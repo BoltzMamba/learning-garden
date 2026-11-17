@@ -6,7 +6,7 @@ import NoteList from '../../components/NoteList.astro';
 import GraphView from '../../components/GraphView.astro';
 import { LANGS, useTranslations, type Lang } from '../../i18n/ui.ts';
 import { localePath } from '../../i18n/paths.ts';
-import { getGarden } from '../../lib/garden.ts';
+import { getGardenView } from '../../lib/garden.ts';
 import { previewGraph } from '../../lib/graph.ts';
 import { todayInTimeZone } from '../../lib/dates.ts';
 
@@ -16,7 +16,9 @@ export function getStaticPaths() {
 
 const lang = Astro.params.lang as Lang;
 const t = useTranslations(lang);
-const { notes, events, github, graph, githubThrough, githubActivity } = await getGarden();
+const { notes, notesById, events, github, graph, githubThrough, githubActivity } = await getGardenView(lang);
+// One activity per logical note, whatever its languages; only the title is localised.
+const localEvents = events.map((e) => (e.noteId && e.type !== 'question' ? { ...e, title: notesById.get(e.noteId)?.data.title ?? e.title } : e));
 const today = todayInTimeZone();
 // Article Graph, connected nodes only, capped so the card stays quiet.
 const preview = previewGraph(graph, 'article', 24);
@@ -30,7 +32,7 @@ const preview = previewGraph(graph, 'article', 24);
     <p class="mt-2 mb-5 max-w-[46rem] text-muted leading-relaxed">{t('home.intro')}</p>
     <ActivityCalendar
       lang={lang}
-      events={events}
+      events={localEvents}
       github={github}
       today={today}
       githubThrough={githubThrough}

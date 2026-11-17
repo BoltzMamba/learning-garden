@@ -1,16 +1,20 @@
 /**
- * UI dictionary. Article content is NOT translated; only interface strings.
+ * UI dictionary (interface strings). Article text is translated separately:
+ * src/content/notes-en/ holds the English edition of each note (see AGENTS.md).
  * Add a key to `zh` first: `en` must satisfy the same shape.
  */
 import categoryLabels from '../data/categories.json';
+import { ENTRY_DEFAULT_LANG } from './entry.ts';
 
 export const languages = { zh: '中文', en: 'English' } as const;
 export type Lang = keyof typeof languages;
 export const LANGS = Object.keys(languages) as Lang[];
-export const DEFAULT_LANG: Lang = 'zh';
+/** First-visit language for the site root (an explicit choice always wins; see entry.ts). */
+export const DEFAULT_LANG: Lang = ENTRY_DEFAULT_LANG;
 
 export const htmlLang: Record<Lang, string> = { zh: 'zh-CN', en: 'en' };
 export const intlLocale: Record<Lang, string> = { zh: 'zh-CN', en: 'en-US' };
+export const ogLocale: Record<Lang, string> = { zh: 'zh_CN', en: 'en_US' };
 
 const zh = {
   'site.name': 'Learning Garden',
@@ -167,6 +171,10 @@ const zh = {
   'note.noQuestions': '这篇笔记还没有公开的问题。',
   'note.ask': '对这篇笔记有疑问？在 GitHub 提问',
   'note.back': '← 返回笔记',
+  'note.translation.auto': '本文英文版由 AI 辅助翻译自中文原文。',
+  'note.translation.manualStale': '中文原文在此英文版最近一次校对后有更新。',
+  'note.translation.original': '阅读中文原文',
+  'note.translation.missing': '这篇笔记还没有英文版，下面显示的是中文原文（仅开发预览会出现）。',
 
   'q.title': '问答',
   'q.intro': '学习中遇到的问题，以及它们的答案。问题和回答都会经过整理后再公开。',
@@ -182,6 +190,7 @@ const zh = {
   'q.sources': '参考资料',
   'q.empty': '暂无公开问题。',
   'q.ask': '在 GitHub Issues 提问',
+  'q.language': '问题与回答以提问时使用的语言发布。',
   'q.contribute': '外部提问通过 GitHub Issues 提交，回答与勘误通过 Pull Request 提交；所有内容都由站主审阅后才会出现在这里。',
 
   'footer.built': '用 Astro 构建，托管于 GitHub Pages。',
@@ -350,6 +359,10 @@ const en: Record<UiKey, string> = {
   'note.noQuestions': 'No public questions about this note yet.',
   'note.ask': 'Have a question about this note? Ask on GitHub',
   'note.back': '← Back to notes',
+  'note.translation.auto': 'This English version was translated from the Chinese original with AI assistance.',
+  'note.translation.manualStale': 'The Chinese original has been updated since this English edition was last reviewed.',
+  'note.translation.original': 'Read the original (中文)',
+  'note.translation.missing': 'This note has no English version yet; the Chinese original is shown below (development preview only).',
 
   'q.title': 'Questions',
   'q.intro': 'Questions that came up while learning, and their answers. Everything is curated before it appears here.',
@@ -365,6 +378,7 @@ const en: Record<UiKey, string> = {
   'q.sources': 'Sources',
   'q.empty': 'No public questions yet.',
   'q.ask': 'Ask on GitHub Issues',
+  'q.language': 'Questions and answers are published in the language they were asked in (mostly Chinese); they are not translated.',
   'q.contribute':
     'External questions are submitted through GitHub Issues, and answers or corrections through Pull Requests. Everything is reviewed by the owner before it appears here.',
 

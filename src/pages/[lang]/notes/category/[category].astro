@@ -8,7 +8,7 @@ import NoteList from '../../../../components/NoteList.astro';
 import CategoryNav from '../../../../components/CategoryNav.astro';
 import { categoryLabel, LANGS, useTranslations, type Lang } from '../../../../i18n/ui.ts';
 import { localePath } from '../../../../i18n/paths.ts';
-import { getGarden } from '../../../../lib/garden.ts';
+import { getGardenView } from '../../../../lib/garden.ts';
 import { LEGACY_CATEGORIES, SECTIONS } from '../../../../lib/sections.ts';
 
 export function getStaticPaths() {
@@ -20,7 +20,7 @@ const lang = Astro.params.lang as Lang;
 const category = Astro.params.category!;
 const t = useTranslations(lang);
 const redirectTo = LEGACY_CATEGORIES[category];
-const { notes } = await getGarden();
+const { notes } = await getGardenView(lang);
 const inCategory = notes.filter((n) => n.data.category === category);
 const label = categoryLabel(redirectTo ?? category, lang);
 const target = redirectTo ? localePath(lang, `/notes/category/${redirectTo}/`) : '';

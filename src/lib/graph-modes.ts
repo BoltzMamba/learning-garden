@@ -17,9 +17,9 @@ export const GRAPH_MODES: readonly GraphMode[] = ['article', 'topic'];
 export interface GraphNode {
   id: string;
   kind: NodeKind;
-  /** Display name (article title; topic English name). */
+  /** Display name (article Chinese title; topic English name). */
   label: string;
-  /** Per-language display names (topics). */
+  /** Per-language display names (articles and topics). */
   labels?: { zh: string; en: string };
   /** Language-neutral path, e.g. /notes/foo/ — pages add base + locale. */
   path: string;

@@ -22,13 +22,29 @@ import {
   type GithubActivity,
 } from './github.ts';
 import { validateReviewRecords, validateRevisionRecords, type RevisionRecord } from './records.ts';
+import { localizeNotes, localizeSeries, titleLabels, type ContentLang, type LocalNote } from './bilingual.ts';
+import { formatScan, scanTranslations, type TranslationScan } from './translation-check.ts';
 
-export type Note = CollectionEntry<'notes'>;
+/** A note's Chinese source entry: the structure of every logical note. */
+export type SourceNote = CollectionEntry<'notes'>;
+export type EnglishNote = CollectionEntry<'notesEn'>;
+/** A note as shown on a page of one language (English text on /en/ pages). */
+export type Note = LocalNote<SourceNote, EnglishNote>;
 export type Question = CollectionEntry<'questions'>;
 
-interface GardenData {
+interface LanguageData {
   notes: Note[];
   notesById: Map<string, Note>;
+  /** Overview id → its member notes in reading order. */
+  seriesByOverview: Map<string, Note[]>;
+}
+
+interface GardenData {
+  /** Chinese source entries: one per logical note. */
+  sources: SourceNote[];
+  /** Per-language views; same notes, same order, localised text. */
+  views: Record<ContentLang, LanguageData>;
+  translations: TranslationScan;
   questions: Question[];
   publicQuestions: Question[];
   events: ActivityEvent[];
@@ -44,8 +60,6 @@ interface GardenData {
   vocab: Vocabulary;
   /** Note id → resolved topic ids. */
   topicsByNote: Map<string, string[]>;
-  /** Overview id → its member notes in reading order. */
-  seriesByOverview: Map<string, Note[]>;
 }
 
 /**
@@ -67,6 +81,23 @@ async function load(): Promise<GardenData> {
   const notes = (await getCollection('notes')).sort(
     (a, b) => b.data.published.localeCompare(a.data.published) || a.data.title.localeCompare(b.data.title),
   );
+  const editions = new Map((await getCollection('notesEn')).map((e) => [e.id, e]));
+
+  // Bilingual state, with the same rules as `npm run translate:check`.
+  // Production builds are strict; `astro dev` only warns so drafts stay editable.
+  const translations = scanTranslations(process.cwd());
+  for (const n of translations.manualStale) console.warn(`[translation] ${n.id}: MANUAL_STALE — ${n.reasons[0]}`);
+  if (translations.failures.length) {
+    const lines = formatScan({ ...translations, notes: translations.failures }, { verbose: false });
+    if (import.meta.env.DEV) {
+      console.warn(['[translation] incomplete English content (a production build would fail):', ...lines].join('\n  '));
+    } else {
+      throw new Error(
+        ['Strict bilingual publishing: these notes block the build (run `npm run translate:check`):', ...lines].join('\n  '),
+      );
+    }
+  }
+  const statuses = new Map(translations.notes.map((n) => [n.id, n.status]));
   const questions = (await getCollection('questions')).sort((a, b) => b.data.created.localeCompare(a.data.created));
   const reviews = validateReviewRecords(reviewsJson, 'src/data/reviews.json');
   const revisions = validateRevisionRecords(revisionsJson, 'src/data/revisions.json');
@@ -125,20 +156,27 @@ async function load(): Promise<GardenData> {
   for (const w of check.warnings) console.warn(`[content] ${w}`);
   if (check.errors.length) throw new Error(['Invalid note metadata:', ...check.errors].join('\n  '));
 
-  const seriesByOverview = new Map<string, Note[]>();
+  // Series membership and order come from the Chinese source; each language
+  // view maps the same ids to its own titles.
+  const seriesIds = new Map<string, string[]>();
   for (const n of notes) {
     if (n.data.contentType !== 'overview') continue;
     const members = seriesMembers(
-      notes.map((m) => ({ id: m.id, series: m.data.series, order: m.data.order, published: m.data.published, note: m })),
+      notes.map((m) => ({ id: m.id, series: m.data.series, order: m.data.order, published: m.data.published })),
       n.id,
     );
-    seriesByOverview.set(n.id, members.map((m) => m.note));
+    seriesIds.set(n.id, members.map((m) => m.id));
   }
+  const view = (lang: ContentLang): LanguageData => {
+    const { notes: localized, notesById } = localizeNotes(notes, lang, editions, statuses);
+    return { notes: localized, notesById, seriesByOverview: localizeSeries(seriesIds, notesById) };
+  };
 
   const graph = buildGraph(
     notes.map((n) => ({
       id: n.id,
       title: n.data.title,
+      labels: titleLabels(n, editions.get(n.id)),
       section: n.data.category,
       contentType: n.data.contentType,
       series: n.data.series,
@@ -152,8 +190,9 @@ async function load(): Promise<GardenData> {
   for (const u of graph.unresolved) console.warn(`[graph] ${u.from}: link "${u.target}" does not point to a note`);
 
   return {
-    notes,
-    notesById: new Map(notes.map((n) => [n.id, n])),
+    sources: notes,
+    views: { zh: view('zh'), en: view('en') },
+    translations,
     questions,
     publicQuestions: questions.filter((q) => q.data.public),
     events,
@@ -166,11 +205,16 @@ async function load(): Promise<GardenData> {
     graph,
     vocab,
     topicsByNote: check.topics,
-    seriesByOverview,
   };
 }
 
 export function getGarden(): Promise<GardenData> {
   cache ??= load();
   return cache;
+}
+
+/** Everything a page of one language needs: the shared garden plus that language's notes. */
+export async function getGardenView(lang: ContentLang) {
+  const garden = await getGarden();
+  return { ...garden, ...garden.views[lang] };
 }

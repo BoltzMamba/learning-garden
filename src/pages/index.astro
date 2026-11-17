@@ -1,38 +1,28 @@
 ---
 /**
- * Root: choose a UI language (saved choice > browser language > zh) and
- * redirect. Static links are shown for no-JS visitors and crawlers.
+ * Root: redirect to the visitor's explicitly chosen language, else English
+ * (see src/i18n/entry.ts). Static links are shown for no-JS visitors and crawlers.
  */
 import { localePath, url } from '../i18n/paths.ts';
+import { entryRedirectScript } from '../i18n/entry.ts';
 import { DEFAULT_LANG, htmlLang, LANGS, languages } from '../i18n/ui.ts';
 
 const targets = Object.fromEntries(LANGS.map((l) => [l, localePath(l, '/')]));
+const script = entryRedirectScript(targets, DEFAULT_LANG);
 ---
 
 <!doctype html>
-<html lang="zh-CN">
+<html lang={htmlLang[DEFAULT_LANG]}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Learning Garden</title>
-    <meta name="description" content="A personal technical knowledge garden. 个人技术知识花园。" />
+    <meta name="description" content="A personal technical knowledge garden, in English and Chinese." />
     <link rel="icon" type="image/svg+xml" href={url('favicon.svg')} />
+    <link rel="canonical" href={new URL(targets[DEFAULT_LANG], Astro.site)} />
     {LANGS.map((l) => <link rel="alternate" hreflang={htmlLang[l]} href={new URL(targets[l], Astro.site)} />)}
     <link rel="alternate" hreflang="x-default" href={new URL(targets[DEFAULT_LANG], Astro.site)} />
-    <script is:inline define:vars={{ targets, fallback: DEFAULT_LANG }}>
-      var lang = null;
-      try { lang = localStorage.getItem('lg-lang'); } catch (e) {}
-      if (!targets[lang]) {
-        var langs = navigator.languages || [navigator.language || ''];
-        lang = fallback;
-        for (var i = 0; i < langs.length; i++) {
-          var l = String(langs[i]).toLowerCase();
-          if (l.indexOf('zh') === 0) { lang = 'zh'; break; }
-          if (l.indexOf('en') === 0) { lang = 'en'; break; }
-        }
-      }
-      location.replace(targets[lang]);
-    </script>
+    <script is:inline set:html={script} />
     <style>
       body { font-family: ui-monospace, Menlo, Consolas, monospace; background: #10151a; color: #e9f1ee; display: grid; place-items: center; min-height: 100vh; margin: 0; }
       a { color: #78bba4; margin: 0 0.75rem; }
@@ -40,7 +30,7 @@ const targets = Object.fromEntries(LANGS.map((l) => [l, localePath(l, '/')]));
   </head>
   <body>
     <p>
-      {LANGS.map((l) => <a href={targets[l]}>{languages[l]}</a>)}
+      {LANGS.map((l) => <a href={targets[l]} hreflang={htmlLang[l]}>{languages[l]}</a>)}
     </p>
   </body>
 </html>

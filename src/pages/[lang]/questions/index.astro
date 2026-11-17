@@ -4,7 +4,7 @@ import { render } from 'astro:content';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { intlLocale, LANGS, useTranslations, type Lang } from '../../../i18n/ui.ts';
 import { localePath } from '../../../i18n/paths.ts';
-import { getGarden, type Question } from '../../../lib/garden.ts';
+import { getGardenView, type Question } from '../../../lib/garden.ts';
 import { formatDisplayDate } from '../../../lib/dates.ts';
 import { newQuestionIssueUrl } from '../../../lib/site.ts';
 
@@ -16,7 +16,7 @@ const lang = Astro.params.lang as Lang;
 const t = useTranslations(lang);
 const fmt = (d: string) => formatDisplayDate(d, intlLocale[lang]);
 // Only `public: true` questions are rendered. This is a display filter, not privacy.
-const { publicQuestions, notesById } = await getGarden();
+const { publicQuestions, notesById } = await getGardenView(lang);
 
 const rendered = await Promise.all(
   publicQuestions.map(async (q) => ({ q, Content: (await render(q)).Content, hasAnswer: Boolean(q.body?.trim()) })),
@@ -25,6 +25,8 @@ const groups: { key: 'open' | 'resolved'; label: string; items: typeof rendered 
   { key: 'open', label: t('q.open'), items: rendered.filter((r) => r.q.data.status === 'open') },
   { key: 'resolved', label: t('q.resolved'), items: rendered.filter((r) => r.q.data.status === 'resolved') },
 ];
+// Questions are not translated: mark their actual language for screen readers and search engines.
+const textLang = (q: Question) => (/[㐀-鿿]/.test(q.data.title + q.data.description) ? 'zh-CN' : 'en');
 const noteTitle = (q: Question) => (q.data.note ? notesById.get(q.data.note)?.data.title : undefined);
 ---
 
@@ -34,6 +36,7 @@ const noteTitle = (q: Question) => (q.data.note ? notesById.get(q.data.note)?.da
 
   <div class="mt-6 card p-4 text-sm">
     <p class="text-muted">{t('q.contribute')}</p>
+    {lang === 'en' && <p class="mt-2 text-muted">{t('q.language')}</p>}
     <a class="mt-3 inline-block link" href={newQuestionIssueUrl()}>{t('q.ask')} ↗</a>
   </div>
 
@@ -52,7 +55,7 @@ const noteTitle = (q: Question) => (q.data.note ? notesById.get(q.data.note)?.da
             <ul class="mt-4 space-y-4">
               {g.items.map(({ q, Content, hasAnswer }) => (
                 <li>
-                  <article id={`q-${q.id}`} class="card p-5 scroll-mt-20 target:border-accent">
+                  <article id={`q-${q.id}`} class="card p-5 scroll-mt-20 target:border-accent" lang={textLang(q) === lang ? undefined : textLang(q)}>
                     <header class="flex flex-wrap items-start gap-2">
                       <span class="chip">{t(q.data.status === 'open' ? 'q.status.open' : 'q.status.resolved')}</span>
                       <h3 class="flex-1 min-w-[12rem] font-semibold leading-snug">

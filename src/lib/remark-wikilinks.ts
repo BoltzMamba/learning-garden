@@ -55,24 +55,38 @@ const headingId = (h: string) =>
     .replace(/[^\p{L}\p{N}\s-]/gu, '')
     .replace(/\s/g, '-');
 
-export default function remarkWikilinks(options: { notesDir?: string } = {}) {
+export default function remarkWikilinks(options: { notesDir?: string; notesEnDir?: string } = {}) {
   const dir = options.notesDir ?? path.join(process.cwd(), 'src/content/notes');
-  let refs = loadNoteRefs(dir);
-  let resolve: Resolver = makeResolver(refs);
-  const titleOf = (id: string) => refs.find((r) => r.id === id)?.title ?? id;
+  const enDir = options.notesEnDir ?? path.join(path.dirname(dir), 'notes-en');
+  let refs: NoteRef[] = [];
+  let enRefs: NoteRef[] = [];
+  let resolveZh: Resolver = () => undefined;
+  let resolveEn: Resolver = () => undefined;
+  const refresh = () => {
+    refs = loadNoteRefs(dir);
+    const ids = new Set(refs.map((r) => r.id));
+    enRefs = loadNoteRefs(enDir).filter((r) => ids.has(r.id)); // never link to an orphan
+    resolveZh = makeResolver(refs);
+    resolveEn = makeResolver([...refs, ...enRefs]);
+  };
+  refresh();
 
   return (tree: unknown, file: { path?: string; history?: string[] }) => {
     const source = file.path ?? file.history?.[0] ?? '';
     // Notes render at /<lang>/notes/<slug>/, question answers at /<lang>/questions/.
     const prefix = /[\\/]content[\\/]questions[\\/]/.test(source) ? '../notes/' : '../';
+    // English editions resolve by id, Chinese or English title; bare [[id]] shows the English title.
+    const english = /[\\/]content[\\/]notes-en[\\/]/.test(source);
+    const resolve = () => (english ? resolveEn : resolveZh);
+    const titleOf = (id: string) =>
+      (english ? enRefs.find((r) => r.id === id)?.title : undefined) ?? refs.find((r) => r.id === id)?.title ?? id;
 
     const lookup = (target: string) => {
-      let id = resolve(target);
+      let id = resolve()(target);
       if (id === undefined) {
         // A note added while the dev server runs: refresh once.
-        refs = loadNoteRefs(dir);
-        resolve = makeResolver(refs);
-        id = resolve(target);
+        refresh();
+        id = resolve()(target);
       }
       return id;
     };

@@ -1,6 +1,6 @@
 ---
 import type { Note } from '../lib/garden.ts';
-import { getGarden } from '../lib/garden.ts';
+import { getGardenView } from '../lib/garden.ts';
 import { topicAncestors, topicLabel } from '../lib/topics.ts';
 import { categoryLabel, intlLocale, useTranslations, type Lang } from '../i18n/ui.ts';
 import { localePath } from '../i18n/paths.ts';
@@ -15,7 +15,7 @@ interface Props {
 }
 const { lang, notes, filterable = false } = Astro.props;
 const t = useTranslations(lang);
-const { vocab, topicsByNote, notesById, seriesByOverview } = await getGarden();
+const { vocab, topicsByNote, notesById, seriesByOverview } = await getGardenView(lang);
 const topicsOf = (id: string) => topicsByNote.get(id) ?? [];
 const filterKeys = (id: string) => [...new Set(topicsOf(id).flatMap((tid) => [tid, ...topicAncestors(vocab, tid)]))];
 ---

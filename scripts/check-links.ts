@@ -54,6 +54,15 @@ for (const file of htmlFiles(DIST)) {
 // Fragment links to other pages (e.g. questions/#q-id) must hit a real id.
 for (const file of htmlFiles(DIST)) {
   const html = readFileSync(file, 'utf8');
+  // Same-page anchors (e.g. a note's table of contents, in either language).
+  // Ids of this very file (index.html and 404.html share a directory).
+  const own = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+  for (const m of html.matchAll(/\shref="#([^"]+)"/g)) {
+    checked++;
+    if (!own.has(decodeURIComponent(m[1].replace(/&amp;/g, '&')))) {
+      problems.push(`${path.relative(DIST, file)}: "#${m[1]}" points to a missing anchor on the same page`);
+    }
+  }
   for (const m of html.matchAll(/\shref="(\/learning-garden\/[^"#]*)#([^"]+)"/g)) {
     const targetIds = ids.get(m[1]);
     if (targetIds && !targetIds.has(decodeURIComponent(m[2]))) {

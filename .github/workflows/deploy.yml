@@ -51,6 +51,11 @@ jobs:
         run: npm test
       - name: Type check
         run: npm run check
+      # Strict bilingual publishing: every note needs a current English edition.
+      # A failure stops the job here, so nothing is uploaded or deployed and the
+      # live site keeps its previous version. (`npm run build` checks again.)
+      - name: Check English translations (strict)
+        run: npm run translate:check -- --strict
       - name: Build
         run: npm run build
       - name: Check internal links

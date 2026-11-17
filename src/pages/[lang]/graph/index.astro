@@ -2,7 +2,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import GraphView from '../../../components/GraphView.astro';
 import { LANGS, useTranslations, type Lang } from '../../../i18n/ui.ts';
-import { getGarden } from '../../../lib/garden.ts';
+import { getGardenView } from '../../../lib/garden.ts';
 
 export function getStaticPaths() {
   return LANGS.map((lang) => ({ params: { lang } }));
@@ -10,7 +10,7 @@ export function getStaticPaths() {
 
 const lang = Astro.params.lang as Lang;
 const t = useTranslations(lang);
-const { graph } = await getGarden();
+const { graph } = await getGardenView(lang);
 ---
 
 <BaseLayout lang={lang} title={t('graph.title')} wide>

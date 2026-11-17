@@ -2,9 +2,9 @@
 import 'katex/dist/katex.min.css';
 import { render } from 'astro:content';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
-import { categoryLabel, intlLocale, LANGS, useTranslations, type Lang } from '../../../i18n/ui.ts';
+import { categoryLabel, htmlLang, intlLocale, LANGS, useTranslations, type Lang } from '../../../i18n/ui.ts';
 import { localePath } from '../../../i18n/paths.ts';
-import { getGarden } from '../../../lib/garden.ts';
+import { getGarden, getGardenView } from '../../../lib/garden.ts';
 import { formatDisplayDate } from '../../../lib/dates.ts';
 import { githubHistoryUrl, githubSourceUrl, newQuestionIssueUrl } from '../../../lib/site.ts';
 import { localGraph, noteConnections, noteNodeId } from '../../../lib/graph.ts';
@@ -13,21 +13,28 @@ import GraphView from '../../../components/GraphView.astro';
 import TopicChips from '../../../components/TopicChips.astro';
 
 export async function getStaticPaths() {
-  const { notes } = await getGarden();
-  return LANGS.flatMap((lang) => notes.map((note) => ({ params: { lang, slug: note.id } })));
+  // One page per logical note and language (ids come from the Chinese source).
+  const { sources } = await getGarden();
+  return LANGS.flatMap((lang) => sources.map((note) => ({ params: { lang, slug: note.id } })));
 }
 
 const lang = Astro.params.lang as Lang;
 const t = useTranslations(lang);
 const locale = intlLocale[lang];
-const { notesById, revisionsByNote, reviewDatesByNote, publicQuestions, graph, vocab, topicsByNote, seriesByOverview } = await getGarden();
+const { notesById, revisionsByNote, reviewDatesByNote, publicQuestions, graph, vocab, topicsByNote, seriesByOverview } = await getGardenView(lang);
 const note = notesById.get(Astro.params.slug!)!;
+// English pages show the English edition; the Chinese text appears there only
+// in `astro dev` while a translation is missing (production builds are strict).
+const untranslated = lang === 'en' && note.contentLang !== 'en';
+const status = note.translationStatus;
+const machineAssisted = lang === 'en' && !untranslated && status?.startsWith('AUTO_');
+const manualStale = lang === 'en' && status === 'MANUAL_STALE';
 const isOverview = note.data.contentType === 'overview';
 // Local graph: one hop of real relations (body links, related, series, questions).
 const local = localGraph(graph, noteNodeId(note.id), 'article', 1);
 const { backlinks, outlinks, related } = noteConnections(graph, note.id);
 const noteTitle = (id: string) => notesById.get(id)?.data.title ?? id;
-const { Content } = await render(note);
+const { Content } = await render(note.contentEntry);
 const hasBody = (note.body ?? '').trim().length > 0;
 
 // Series: the contents of an overview, or this note's place in its series.
@@ -49,7 +56,7 @@ const fmt = (d: string) => formatDisplayDate(d, locale);
 <BaseLayout lang={lang} title={note.data.title} description={note.data.description}>
   <a href={localePath(lang, '/notes/')} class="text-sm text-muted hover:text-accent">{t('note.back')}</a>
 
-  <article class="mt-6">
+  <article class="mt-6" lang={htmlLang[note.contentLang]}>
     <header class="mb-8">
       <p class="font-mono text-xs text-accent flex flex-wrap items-center gap-2">
         <a href={localePath(lang, `/notes/category/${note.data.category}/`)} class="hover:underline">
@@ -71,6 +78,23 @@ const fmt = (d: string) => formatDisplayDate(d, locale);
         </span>
         <TopicChips lang={lang} topics={topics} label={t('note.tags')} />
       </div>
+      {
+        untranslated && (
+          <p class="mt-4 text-sm border-l-2 border-accent pl-3" lang="en" data-translation-missing>
+            {t('note.translation.missing')}
+          </p>
+        )
+      }
+      {
+        (machineAssisted || manualStale) && (
+          <p class="mt-4 text-xs text-muted" lang="en" data-translation={status}>
+            {t(manualStale ? 'note.translation.manualStale' : 'note.translation.auto')}{' '}
+            <a class="link" href={localePath('zh', `/notes/${note.id}/`)} hreflang="zh-CN">
+              {t('note.translation.original')}
+            </a>
+          </p>
+        )
+      }
       {
         series && (
           <p class="mt-4 text-sm text-muted border-l-2 border-accent pl-3">
