@@ -3,6 +3,8 @@ import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 import { normalizeCalendarDate } from './lib/dates.ts';
 import { SLUG_RE } from './lib/slug.ts';
+import { LEGACY_CATEGORIES, SECTIONS, toSection } from './lib/sections.ts';
+import { CONTENT_TYPES } from './lib/content-model.ts';
 
 /** `YYYY-MM-DD`; tolerates YAML auto-dates without timezone shifts. */
 const calendarDate = z.union([z.string(), z.date()]).transform((value, ctx) => {
@@ -24,9 +26,27 @@ const notes = defineCollection({
   schema: z.object({
     title: z.string().min(1),
     description: z.string().min(1),
-    category: slug,
+    /** Section: guide | practice | knowledge | projects (legacy category slugs are mapped). */
+    category: slug.transform((value, ctx) => {
+      const section = toSection(value);
+      if (section) return section;
+      ctx.addIssue({
+        code: 'custom',
+        message: `"${value}" is not a section; use one of ${SECTIONS.join(', ')} (legacy: ${Object.keys(LEGACY_CATEGORIES).join(', ')})`,
+      });
+      return z.NEVER;
+    }),
+    /** Topic ids or aliases from src/data/topics.json (checked in src/lib/garden.ts). */
     tags: z.array(z.string().min(1)).default([]),
     published: calendarDate,
+    /** `overview` = a series' landing note; `note` = an ordinary article. */
+    contentType: z.enum(CONTENT_TYPES).default('note'),
+    /** Id of the overview this note belongs to (at most one series). */
+    series: slug.optional(),
+    /** Position within the series; gaps are fine (10, 20, 30). */
+    order: z.number().optional(),
+    /** Ids of notes the author has confirmed as related (undirected). */
+    related: z.array(slug).default([]),
   }),
 });
 

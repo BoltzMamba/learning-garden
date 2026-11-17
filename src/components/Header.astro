@@ -13,10 +13,11 @@ interface Props {
 const { lang, path, overlay = false } = Astro.props;
 const t = useTranslations(lang);
 
-// Only sections that exist. Add Projects / About here when those pages ship.
+// Only sections that exist. Add About here when that page ships.
 const nav = [
   { href: '/', label: t('nav.home'), match: (p: string) => p === '/' },
   { href: '/notes/', label: t('nav.notes'), match: (p: string) => p.startsWith('/notes/') },
+  { href: '/projects/', label: t('nav.projects'), match: (p: string) => p.startsWith('/projects/') },
   { href: '/questions/', label: t('nav.questions'), match: (p: string) => p.startsWith('/questions/') },
   { href: '/graph/', label: t('nav.graph'), match: (p: string) => p.startsWith('/graph/') },
 ];
@@ -30,12 +31,13 @@ const otherLangs = LANGS.filter((l) => l !== lang);
   ]}
   data-overlay={overlay ? '' : undefined}
 >
-  <div class:list={['mx-auto flex items-center gap-3 px-4 sm:px-6 h-14', overlay ? 'max-w-[1200px]' : 'max-w-[1000px]']}>
+  <div class:list={['mx-auto flex items-center gap-2 sm:gap-3 px-4 sm:px-6 h-14', overlay ? 'max-w-[1200px]' : 'max-w-[1000px]']}>
     <a href={localePath(lang, '/')} class="font-mono text-sm font-medium tracking-tight shrink-0 no-underline">
       <span class="text-accent" aria-hidden="true">~/</span><span class="hidden sm:inline">learning-</span>garden
     </a>
-    <nav aria-label={t('nav.main')} class="ml-auto">
-      <ul class="flex items-center gap-1 sm:gap-2 text-sm">
+    <!-- On narrow screens the links scroll sideways instead of overflowing the page. -->
+    <nav aria-label={t('nav.main')} class="nav-scroll ml-auto min-w-0 overflow-x-auto">
+      <ul class="flex w-max items-center sm:gap-2 text-sm">
         {
           nav.map((item) => (
             // On phones the logo already links home, which frees room for the Graph link.
@@ -43,7 +45,7 @@ const otherLangs = LANGS.filter((l) => l !== lang);
               <a
                 href={localePath(lang, item.href)}
                 aria-current={item.match(path) ? 'page' : undefined}
-                class="rounded px-2 py-1 text-muted hover:text-fg aria-[current=page]:text-accent"
+                class="block whitespace-nowrap rounded px-1.5 sm:px-2 py-1 text-muted hover:text-fg aria-[current=page]:text-accent"
               >
                 {item.label}
               </a>
@@ -52,7 +54,7 @@ const otherLangs = LANGS.filter((l) => l !== lang);
         }
       </ul>
     </nav>
-    <div class="flex items-center gap-1 border-l border-line pl-2 sm:pl-3">
+    <div class="flex shrink-0 items-center gap-1 border-l border-line pl-2 sm:pl-3">
       {
         otherLangs.map((l) => (
           <a
@@ -88,6 +90,12 @@ const otherLangs = LANGS.filter((l) => l !== lang);
 </header>
 
 <style>
+  .nav-scroll {
+    scrollbar-width: none;
+  }
+  .nav-scroll::-webkit-scrollbar {
+    display: none;
+  }
   /* Overlay: transparent over the ocean, solid once the page scrolls. */
   .site-header[data-overlay] {
     border-color: transparent;
@@ -150,6 +158,13 @@ const otherLangs = LANGS.filter((l) => l !== lang);
     const onScroll = () => header.toggleAttribute('data-scrolled', window.scrollY > 24);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
+  }
+
+  // Narrow screens: keep the current section's link visible in the scrolling nav.
+  const navScroll = document.querySelector<HTMLElement>('.nav-scroll');
+  const currentLink = navScroll?.querySelector<HTMLElement>('[aria-current="page"]');
+  if (navScroll && currentLink && navScroll.scrollWidth > navScroll.clientWidth) {
+    navScroll.scrollLeft = currentLink.offsetLeft + currentLink.offsetWidth - navScroll.clientWidth + 8;
   }
 
   // Remember an explicit language choice for the root redirect.

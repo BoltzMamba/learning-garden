@@ -39,7 +39,13 @@ jobs:
       - name: Sync GitHub contributions
         run: npm run github:sync
         env:
-          # Read-only workflow token: public contribution data only, never shipped to the browser.
+          # Optional repository secret: a token of the BoltzMamba account itself
+          # (classic PAT with `read:user`, or fine-grained with read-only access),
+          # so GitHub returns the account's own view of its contributions.
+          # Empty when unset or on pull requests from forks; the script then uses
+          # the read-only workflow token (public calendar). Tokens are only used
+          # here, never written to the cache or shipped to the browser.
+          CONTRIBUTIONS_TOKEN: ${{ secrets.CONTRIBUTIONS_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
       - name: Unit and CLI tests
         run: npm test

@@ -1,44 +1,62 @@
 ---
 import type { Note } from '../lib/garden.ts';
-import { categoryLabel, intlLocale, type Lang } from '../i18n/ui.ts';
+import { getGarden } from '../lib/garden.ts';
+import { topicAncestors, topicLabel } from '../lib/topics.ts';
+import { categoryLabel, intlLocale, useTranslations, type Lang } from '../i18n/ui.ts';
 import { localePath } from '../i18n/paths.ts';
 import { formatDisplayDate } from '../lib/dates.ts';
+import TopicChips from './TopicChips.astro';
 
 interface Props {
   lang: Lang;
   notes: Note[];
-  /** Expose data-tags for client-side tag filtering. */
+  /** Expose data-tags (topic ids incl. ancestors) for client-side topic filtering. */
   filterable?: boolean;
 }
 const { lang, notes, filterable = false } = Astro.props;
+const t = useTranslations(lang);
+const { vocab, topicsByNote, notesById, seriesByOverview } = await getGarden();
+const topicsOf = (id: string) => topicsByNote.get(id) ?? [];
+const filterKeys = (id: string) => [...new Set(topicsOf(id).flatMap((tid) => [tid, ...topicAncestors(vocab, tid)]))];
 ---
 
 <ul class="divide-y divide-line border-y border-line">
   {
-    notes.map((note) => (
-      <li class="py-4" data-tags={filterable ? JSON.stringify(note.data.tags) : undefined}>
-        <article class="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:gap-4">
-          <time datetime={note.data.published} class="font-mono text-xs text-muted pt-1">
-            {formatDisplayDate(note.data.published, intlLocale[lang])}
-          </time>
-          <div class="min-w-0">
-            <h3 class="font-semibold leading-snug">
-              <a href={localePath(lang, `/notes/${note.id}/`)} class="hover:text-accent">
-                {note.data.title}
-              </a>
-            </h3>
-            <p class="mt-1 text-sm text-muted">{note.data.description}</p>
-            <div class="mt-2 flex flex-wrap gap-1.5">
-              <a class="chip" href={localePath(lang, `/notes/category/${note.data.category}/`)}>
-                {categoryLabel(note.data.category, lang)}
-              </a>
-              {note.data.tags.map((tag) => (
-                <span class="chip">#{tag}</span>
-              ))}
+    notes.map((note) => {
+      const series = note.data.series ? notesById.get(note.data.series) : undefined;
+      return (
+        <li class="py-4" data-tags={filterable ? JSON.stringify(filterKeys(note.id)) : undefined}>
+          <article class="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:gap-4">
+            <time datetime={note.data.published} class="font-mono text-xs text-muted pt-1">
+              {formatDisplayDate(note.data.published, intlLocale[lang])}
+            </time>
+            <div class="min-w-0">
+              <h3 class="font-semibold leading-snug">
+                <a href={localePath(lang, `/notes/${note.id}/`)} class="hover:text-accent">
+                  {note.data.title}
+                </a>
+              </h3>
+              <p class="mt-1 text-sm text-muted">{note.data.description}</p>
+              <div class="mt-2 flex flex-wrap gap-1.5">
+                <a class="chip" href={localePath(lang, `/notes/category/${note.data.category}/`)}>
+                  {categoryLabel(note.data.category, lang)}
+                </a>
+                {note.data.contentType === 'overview' && (
+                  <span class="chip text-accent border-accent">
+                    {t('series.badge')} · {t('series.count', { n: seriesByOverview.get(note.id)?.length ?? 0 })}
+                  </span>
+                )}
+                {series && (
+                  <a class="chip" href={localePath(lang, `/notes/${series.id}/`)}>
+                    ↳ {series.data.title}
+                  </a>
+                )}
+                <TopicChips lang={lang} topics={topicsOf(note.id).map((id) => ({ id, label: topicLabel(vocab, id, lang) }))} plain />
+              </div>
             </div>
-          </div>
-        </article>
-      </li>
-    ))
+          </article>
+        </li>
+      );
+    })
   }
 </ul>

@@ -15,7 +15,8 @@
     "garden": "node scripts/garden.ts",
     "check:links": "node scripts/check-links.ts",
     "verify": "npm test && npm run check && npm run build && npm run check:links",
-    "github:sync": "node scripts/github-activity.ts"
+    "github:sync": "node scripts/github-activity.ts",
+    "github:check": "node scripts/check-github-data.ts"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.9",

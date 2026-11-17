@@ -1,0 +1,30 @@
+---
+/** Topic chips linking to the notes list filtered by that topic. */
+import { localePath } from '../i18n/paths.ts';
+import type { Lang } from '../i18n/ui.ts';
+
+interface Props {
+  lang: Lang;
+  topics: { id: string; label: string }[];
+  label?: string;
+  /** Plain chips instead of links (inside another link's card). */
+  plain?: boolean;
+}
+const { lang, topics, label, plain = false } = Astro.props;
+---
+
+{
+  topics.length > 0 && (
+    <span class="flex flex-wrap gap-1.5" aria-label={label}>
+      {topics.map((topic) =>
+        plain ? (
+          <span class="chip">#{topic.label}</span>
+        ) : (
+          <a class="chip" href={`${localePath(lang, '/notes/')}?tag=${encodeURIComponent(topic.id)}`}>
+            #{topic.label}
+          </a>
+        ),
+      )}
+    </span>
+  )
+}

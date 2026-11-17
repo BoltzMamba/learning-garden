@@ -2,9 +2,11 @@
  * GitHub contribution data for the learning calendar (pure).
  *
  * Counting rules:
- * - Source: the account's public contribution calendar (everything GitHub
+ * - Source: the account's GitHub contribution calendar via GraphQL
+ *   `contributionsCollection.contributionCalendar` (everything GitHub
  *   counts: commits to default branches, pull requests, issues, reviews,
- *   new repositories…). Day attribution is GitHub's own — commits are dated
+ *   new repositories…). Private-repository work appears only if GitHub
+ *   itself counts it for this account; nothing is inferred or filled in. Day attribution is GitHub's own — commits are dated
  *   in the commit's timezone (UTC+8 here, matching Asia/Singapore), so
  *   dates are used as-is and never re-bucketed.
  * - De-duplication: a commit to this site's repository that only changes
@@ -12,6 +14,8 @@
  *   garden event, so it is subtracted from that day's GitHub count. The
  *   subtraction is capped by GitHub's own count of commits to this repo
  *   that day (and by the day's total), so it can never go negative.
+ * - Freshness: `range.to` is the last date the snapshot covers. Dates after
+ *   it are "not synced", never "zero contributions".
  */
 import { isValidCalendarDate } from './dates.ts';
 
@@ -27,6 +31,16 @@ export interface GithubActivity {
   contentCommits?: Record<string, number>;
   /** How duplicates were removed. */
   dedupe: 'content-commits' | 'site-repo' | 'none';
+  /** Dates the snapshot covers (inclusive, Asia/Singapore calendar dates). */
+  range?: { from: string; to: string };
+  /** Account the token belongs to (decides whether private contributions are visible). */
+  viewer?: string;
+  /** GitHub's own totalContributions per year, for consistency checks. */
+  yearTotals?: Record<string, number>;
+  /** Private contributions GitHub reports only as anonymous counts (per year). */
+  restricted?: Record<string, number>;
+  /** The most recent failed sync, if it failed after this snapshot was taken. */
+  lastError?: { at: string; message: string };
 }
 
 const isCountMap = (v: unknown): v is Record<string, number> =>
@@ -41,7 +55,9 @@ export function parseGithubActivity(data: unknown): GithubActivity | undefined {
   if (typeof d.login !== 'string' || !isCountMap(d.days)) return undefined;
   if (d.siteCommits !== undefined && !isCountMap(d.siteCommits)) return undefined;
   if (d.contentCommits !== undefined && !isCountMap(d.contentCommits)) return undefined;
-  return {
+  const range =
+    d.range && isValidCalendarDate(d.range.from) && isValidCalendarDate(d.range.to) ? { from: d.range.from, to: d.range.to } : undefined;
+  const out: GithubActivity = {
     login: d.login,
     fetchedAt: String(d.fetchedAt ?? ''),
     source: d.source === 'html' ? 'html' : 'graphql',
@@ -49,6 +65,50 @@ export function parseGithubActivity(data: unknown): GithubActivity | undefined {
     siteCommits: d.siteCommits,
     contentCommits: d.contentCommits,
     dedupe: d.dedupe === 'content-commits' || d.dedupe === 'site-repo' ? d.dedupe : 'none',
+  };
+  if (range) out.range = range;
+  if (typeof d.viewer === 'string') out.viewer = d.viewer;
+  if (d.yearTotals && typeof d.yearTotals === 'object') out.yearTotals = d.yearTotals;
+  if (d.restricted && typeof d.restricted === 'object') out.restricted = d.restricted;
+  if (d.lastError && typeof d.lastError.message === 'string') out.lastError = { at: String(d.lastError.at ?? ''), message: d.lastError.message };
+  return out;
+}
+
+/**
+ * Last date the GitHub snapshot covers: `range.to`, or (older caches) the
+ * fetch date in Asia/Singapore. Undefined when there is no usable snapshot.
+ */
+export function githubSyncedThrough(activity: GithubActivity | undefined): string | undefined {
+  if (!activity) return undefined;
+  if (activity.range) return activity.range.to;
+  const t = Date.parse(activity.fetchedAt);
+  if (Number.isNaN(t)) return undefined;
+  return new Date(t + 8 * 3600_000).toISOString().slice(0, 10);
+}
+
+/** Whole days between two calendar dates (b − a). */
+export function daysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+}
+
+/** One-line, token-free summary used by the sync script, the build and the checker. */
+export function summarizeGithubActivity(activity: GithubActivity) {
+  const values = Object.values(activity.days);
+  const total = values.reduce((a, b) => a + b, 0);
+  const yearTotal = activity.yearTotals ? Object.values(activity.yearTotals).reduce((a, b) => a + b, 0) : undefined;
+  const restricted = activity.restricted ? Object.values(activity.restricted).reduce((a, b) => a + b, 0) : undefined;
+  return {
+    login: activity.login,
+    viewer: activity.viewer,
+    source: activity.source,
+    range: activity.range,
+    fetchedAt: activity.fetchedAt,
+    nonZeroDays: values.filter((n) => n > 0).length,
+    total,
+    /** GitHub's own yearly totals summed; must equal `total` when present. */
+    apiTotal: yearTotal,
+    consistent: yearTotal === undefined || yearTotal === total,
+    restricted,
   };
 }
 
@@ -70,7 +130,11 @@ export function githubCountsByDate(activity: GithubActivity | undefined): Map<st
 // ── fetch-result parsing (used by scripts/github-activity.ts) ──────────
 
 interface GraphqlYear {
-  contributionCalendar: { weeks: { contributionDays: { date: string; contributionCount: number }[] }[] };
+  restrictedContributionsCount?: number;
+  contributionCalendar: {
+    totalContributions?: number;
+    weeks: { contributionDays: { date: string; contributionCount: number }[] }[];
+  };
   commitContributionsByRepository: {
     repository: { nameWithOwner: string };
     contributions: { nodes: { occurredAt: string; commitCount: number }[] };
@@ -84,8 +148,12 @@ interface GraphqlYear {
 export function parseGraphqlYears(years: Record<number, GraphqlYear>, siteRepo: string) {
   const days: Record<string, number> = {};
   const siteCommits: Record<string, number> = {};
+  const yearTotals: Record<string, number> = {};
+  const restricted: Record<string, number> = {};
   for (const [yearKey, y] of Object.entries(years)) {
     const year = String(yearKey);
+    if (typeof y.contributionCalendar.totalContributions === 'number') yearTotals[year] = y.contributionCalendar.totalContributions;
+    if (typeof y.restrictedContributionsCount === 'number') restricted[year] = y.restrictedContributionsCount;
     for (const w of y.contributionCalendar.weeks) {
       for (const d of w.contributionDays) {
         if (d.date.startsWith(year) && d.contributionCount > 0) days[d.date] = d.contributionCount;
@@ -100,7 +168,7 @@ export function parseGraphqlYears(years: Record<number, GraphqlYear>, siteRepo: 
       }
     }
   }
-  return { days, siteCommits };
+  return { days, siteCommits, yearTotals, restricted };
 }
 
 /** Parse GitHub's public contributions page (fallback when the API is unavailable). */

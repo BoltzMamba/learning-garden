@@ -13,9 +13,17 @@ interface Props {
   github?: ReadonlyMap<string, number>;
   /** Today in the calendar timezone (build time). */
   today: string;
+  /**
+   * Last date the GitHub snapshot covers. Days after it (up to today) are
+   * "not synced" — never shown as zero contributions. Undefined = no GitHub data.
+   */
+  githubThrough?: string;
+  /** Set when the most recent sync attempt failed. */
+  githubError?: boolean;
 }
 
-const { lang, events, github = new Map<string, number>(), today } = Astro.props;
+const { lang, events, github = new Map<string, number>(), today, githubThrough, githubError = false } = Astro.props;
+const unsynced = (date: string) => !githubThrough || (date > githubThrough && date <= today);
 const t = useTranslations(lang);
 const locale = intlLocale[lang];
 
@@ -39,7 +47,10 @@ const longDate = (date: string) =>
   formatDisplayDate(date, locale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
 const countText = (n: number) => (n === 0 ? t('cal.noActivity') : t('cal.activities', { n }));
 const breakdown = (date: string) =>
-  t('cal.breakdown', { notes: notesByDate.get(date) ?? 0, github: github.get(date) ?? 0 });
+  t('cal.breakdown', { notes: notesByDate.get(date) ?? 0, github: unsynced(date) ? t('cal.githubUnsyncedShort') : (github.get(date) ?? 0) });
+const syncStatus = !githubThrough
+  ? t('cal.githubUnavailable')
+  : t(githubError ? 'cal.githubSyncFailed' : 'cal.githubSynced', { date: githubThrough });
 const yearSum = (map: ReadonlyMap<string, number>, year: number) =>
   [...map].reduce((sum, [d, n]) => (d.startsWith(`${year}-`) ? sum + n : sum), 0);
 
@@ -61,6 +72,8 @@ const payload = {
   tipNotes: t('cal.tip.notes'),
   tipGithub: t('cal.tip.github'),
   tipTotal: t('cal.tip.total'),
+  unsyncedShort: t('cal.githubUnsyncedShort'),
+  unsynced: t('cal.githubUnsynced'),
   labels: {
     publish: t('cal.type.publish'),
     revision: t('cal.type.revision'),
@@ -121,6 +134,7 @@ const payload = {
                     data-level={c.level}
                     data-notes={notesByDate.get(c.date) ?? 0}
                     data-github={github.get(c.date) ?? 0}
+                    data-github-unsynced={unsynced(c.date) && !c.isFuture ? '' : undefined}
                     data-future={c.isFuture ? '' : undefined}
                     tabindex={c.date === today || (g.year !== currentYear && c.date.endsWith('-01-01')) ? 0 : -1}
                     aria-pressed="false"
@@ -153,6 +167,9 @@ const payload = {
     <p class="text-sm text-muted">{t('cal.hint')}</p>
   </div>
   <p class="mt-3 text-xs text-muted">{t('cal.legend')}</p>
+  <p class:list={['mt-1 text-xs font-mono', githubError || !githubThrough ? 'text-accent' : 'text-muted']} data-github-status>
+    {syncStatus}
+  </p>
 
   <script type="application/json" data-calendar-payload set:html={JSON.stringify(payload).replace(/</g, '\\u003c')} />
 </section>
@@ -304,6 +321,8 @@ const payload = {
     githubLabelOne: string;
     githubLink: string;
     githubUrl: string;
+    unsyncedShort: string;
+    unsynced: string;
     tipNotes: string;
     tipGithub: string;
     tipTotal: string;
@@ -338,7 +357,12 @@ const payload = {
       heading.textContent = cell.getAttribute('aria-label') ?? date;
       if (date > payload.today) heading.append(' ', payload.future);
       details.append(heading);
-      if (gh > 0) {
+      const notSynced = cell.hasAttribute('data-github-unsynced');
+      if (notSynced) {
+        const p = el('p', 'mb-2 flex flex-wrap items-baseline gap-x-2 text-sm text-muted');
+        p.append(el('span', 'chip', 'GitHub'), payload.unsynced);
+        details.append(p);
+      } else if (gh > 0) {
         const p = el('p', 'mb-2 flex flex-wrap items-baseline gap-x-2 text-sm');
         p.append(el('span', 'chip', 'GitHub'), gh === 1 ? payload.githubLabelOne : payload.githubLabel.replace('__N__', String(gh)));
         const a = el('a', 'link', payload.githubLink);
@@ -348,7 +372,7 @@ const payload = {
         details.append(p);
       }
       if (!list.length) {
-        if (gh > 0) return;
+        if (gh > 0 || notSynced) return;
         details.append(el('p', 'text-sm text-muted', payload.empty));
         return;
       }
@@ -422,14 +446,15 @@ const payload = {
       const gh = Number(cell.dataset.github ?? 0);
       tip.replaceChildren();
       tip.append(el('b', '', cell.dataset.date!));
-      const rows: [string, number, string][] = [
-        [payload.tipNotes, notes, 'tip-row'],
-        [payload.tipGithub, gh, 'tip-row'],
-        [payload.tipTotal, notes + gh, 'tip-row total'],
+      const notSynced = cell.hasAttribute('data-github-unsynced');
+      const rows: [string, string, string][] = [
+        [payload.tipNotes, String(notes), 'tip-row'],
+        [payload.tipGithub, notSynced ? payload.unsyncedShort : String(gh), 'tip-row'],
+        [payload.tipTotal, notSynced ? `${notes}+?` : String(notes + gh), 'tip-row total'],
       ];
       for (const [label, n, cls] of rows) {
         const row = el('div', cls);
-        row.append(el('span', '', label), el('span', '', String(n)));
+        row.append(el('span', '', label), el('span', '', n));
         tip.append(row);
       }
       const r = cell.getBoundingClientRect();

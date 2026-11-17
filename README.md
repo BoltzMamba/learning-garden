@@ -39,7 +39,8 @@ The CLI asks for a title, slug, category, tags and a one-line description. It th
 - The **file name is the note's permanent ID**. Reviews, revisions and questions all refer to it, so don't rename it once you've published.
 - A Chinese-only title has no Latin letters to build a slug from, so you'll be asked to choose one (for example `dp-intro`).
 - A duplicate slug is rejected and nothing is overwritten.
-- `category` is a slug. To give it display names in both languages, add an entry to `src/data/categories.json`. Unknown categories still work: the label falls back to the slug in Title Case.
+- `category` is one of four sections: `guide` (花园指南), `practice` (刷题练习), `knowledge` (基础知识), `projects` (项目档案). Older slugs (`meta`, `algorithms`, `ai-agents`, `software-engineering`) are still accepted and mapped, and their old category URLs redirect.
+- `tags` must be topics from the controlled vocabulary in `src/data/topics.json` (an id, an alias or a display name; `npm run garden -- topics` lists them). Synonyms such as `LLM Agent` resolve to one topic. To add a topic, add an entry with `zh`, `en`, an optional `parent` (at most three levels deep) and optional `aliases`.
 
 Frontmatter reference:
 
@@ -47,11 +48,31 @@ Frontmatter reference:
 ---
 title: "ReAct 智能体循环"
 description: "One-line summary shown in lists."
-category: "ai-agents"
-tags: ["agent", "llm"]
-published: "2026-11-16"   # YYYY-MM-DD, calendar date in Asia/Singapore
+category: "knowledge"         # guide | practice | knowledge | projects
+tags: ["ai-agent", "llm"]     # topic ids or aliases
+published: "2026-11-16"       # YYYY-MM-DD, calendar date in Asia/Singapore
+contentType: "note"           # optional: note (default) | overview
+series: "ai-agents-overview"  # optional: id of an overview note
+order: 10                     # optional: position in the series (gaps are fine)
+related: ["mcp-basics"]       # optional: confirmed related notes (undirected)
 ---
 ```
+
+A **series** is an ordinary note with `contentType: "overview"`. Its body is an optional overview, and its contents list is generated at build time from every note whose `series` points to it, sorted by `order` (notes without `order` come after, sorted by date and then id). A note belongs to at most one series, and series cannot be nested. The build fails with the file, field and value if a `series`, `related` or tag reference is invalid.
+
+```bash
+npm run garden -- new --type overview --title "AI Agent" --slug ai-agents-overview --category knowledge --description "..."
+npm run garden -- new --title "MCP 基础" --slug mcp-basics --category knowledge --series ai-agents-overview --order 20 --tags mcp --description "..."
+```
+
+## Knowledge graph
+
+`/graph/` has two views built from one set of build-time data (`src/lib/graph.ts`):
+
+- **Article graph** shows body links (`links_to`, directed), `related` (`related_to`, undirected), series membership (`belongs_to`) and public questions.
+- **Topic graph** shows articles, their topics (`tagged_with`), the topic hierarchy (`parent_of`) and series membership.
+
+Two notes that share a tag are never linked directly, and nothing is inferred automatically. The homepage shows a capped preview of connected articles, and each note shows its one-hop neighbourhood.
 
 Non-interactive form (every prompt has a flag):
 
