@@ -22,25 +22,26 @@ npm run dev
 npm run verify
 ```
 
-这只检查本地内容，不会发布。尚未下载项目，请先看[本地启动](#本地启动)；正式上线见[发布流程](#发布流程)。
+这只检查本地内容，不会发布。新建或更新中文后，先按[双语文章流程](#如何管理中文与英文文章)同步英文，再运行发布检查；英文缺失或自动译文未同步会阻止构建。尚未下载项目，请先看[本地启动](#本地启动)；正式上线见[发布流程](#发布流程)。
 
 ## 阅读导航
 
-本页使用手动目录与现有标题锚点。专题自动目录另见第 5 节。
+本页使用手动目录与现有标题锚点。专题自动目录见“管理栏目、标签与专题”。
 
 1. [Learning Garden 是什么](#learning-garden-是什么)
 2. [本地启动](#本地启动)
 3. [创建第一篇文章](#创建第一篇文章)
-4. [编写和编辑 Markdown](#编写和编辑-markdown)
-5. [管理栏目、标签与专题](#管理栏目标签与专题)
-6. [维护和使用知识图谱](#维护和使用知识图谱)
-7. [记录复习](#记录复习)
-8. [编辑文章与记录修订](#编辑文章与记录修订)
-9. [提问与回复](#提问与回复)
-10. [使用学习日历](#使用学习日历)
-11. [发布流程](#发布流程)
-12. [常见问题](#常见问题)
-13. [隐私与安全](#隐私与安全)
+4. [如何管理中文与英文文章](#如何管理中文与英文文章)
+5. [编写和编辑 Markdown](#编写和编辑-markdown)
+6. [管理栏目、标签与专题](#管理栏目标签与专题)
+7. [维护和使用知识图谱](#维护和使用知识图谱)
+8. [记录复习](#记录复习)
+9. [编辑文章与记录修订](#编辑文章与记录修订)
+10. [提问与回复](#提问与回复)
+11. [使用学习日历](#使用学习日历)
+12. [发布流程](#发布流程)
+13. [常见问题](#常见问题)
+14. [隐私与安全](#隐私与安全)
 
 ## Learning Garden 是什么
 
@@ -48,7 +49,7 @@ npm run verify
 
 学习日历回答“哪些日子做过什么”；Graph View 回答“这些知识如何联系”。网站不会把浏览次数当作复习，也不会根据标题相似度推测知识引用。
 
-这是静态站点：阅读发生在浏览器，内容维护发生在本地 Markdown、JSON 和 Git 中。目前没有后台 CMS、实时评论或自动复习排程。中文与英文路径共用同一份文章正文，语言切换主要改变界面、栏目及 Topic 名称，**不会翻译文章**，也没有中英文文章配对管理机制。
+这是静态站点：阅读发生在浏览器，内容维护发生在本地 Markdown、JSON 和 Git 中。目前没有后台 CMS、实时评论或自动复习排程。中文是主要内容来源，英文以同 ID 的独立 Markdown 维护；语言切换会显示对应版本，不会调用浏览器实时翻译。
 
 ## 本地启动
 
@@ -83,7 +84,9 @@ npm run dev
 | --- | --- |
 | `npm test` | 执行现有单元测试和 CLI 集成测试 |
 | `npm run check` | Astro / TypeScript 检查 |
-| `npm run build` | 生成静态站点到 `dist/` |
+| `npm run translate:check` | 查看英文缺失、同步状态和需要作者处理的问题，不执行翻译 |
+| `npm run translate:check -- --strict` | 严格双语发布检查，阻塞状态返回非零退出码 |
+| `npm run build` | 先严格检查双语内容，再生成静态站点到 `dist/` |
 | `npm run check:links` | 检查已生成页面的内部链接及资源；先构建 |
 | `npm run verify` | 依次执行测试、类型检查、构建和内部链接检查 |
 | `npm run preview` | 预览最近一次 `dist/` 构建，以终端地址为准 |
@@ -121,6 +124,8 @@ npm run garden -- new --title "我的第一篇笔记" --slug my-first-note --cat
 
 **预期结果：** 创建 `src/content/notes/my-first-note.md`。在文件的 `## 要点` 下写正文，重启预览后访问 `http://localhost:4321/learning-garden/zh/notes/my-first-note/`，或从笔记列表进入。
 
+此命令只创建中文源文件。正式构建前还需要同名的 `src/content/notes-en/my-first-note.md`，完整流程见下一节。
+
 **注意：** 交互式和参数式是替代方式，不要用同一 Slug 连续创建两次。重复 Slug 会被拒绝，不覆盖文件。CLI 已支持 `--type`、`--series`、`--order`、`--related`；正文和之后的元数据修改仍需编辑文件。
 
 ### 方式 B：手动创建 Markdown
@@ -143,6 +148,8 @@ related: ["how-this-garden-works"]
 
 请把日期替换为真实首次发布日期。加载器只读取该目录直接包含的 `*.md`，不读取子目录或 `.mdx`。文件名去掉 `.md` 就是文章 ID，不需要另加 `slug` 字段。文件名使用小写英文字母、数字和单个连字符，最长 80 字符，如 `dynamic-programming-intro`。
 
+下表是中文源文件的字段，不要把整份 Frontmatter 复制到英文目录。
+
 | 字段 | 是否必填 | 填写规则 |
 | --- | --- | --- |
 | `title` | 是 | 非空标题 |
@@ -158,6 +165,133 @@ related: ["how-this-garden-works"]
 **发布后保持文件名稳定。** URL、复习、修订、问题和专题关系都依赖 ID。修改标题通常不影响 URL；重命名文件会改变 URL，项目不会自动为旧文章地址创建重定向。
 
 `published` 显示首次发布日期，并产生一次发布活动，不是“最后更新日期”。CLI 拒绝未来日期，但手动填写未来日期不构成预约发布：当前没有草稿或定时发布机制，构建会读取全部有效文章。未准备公开的内容不要提交到公开仓库。
+
+## 如何管理中文与英文文章
+
+**目标：** 以中文积累知识，同时为英文读者提供完整、可维护的版本。英文可以由 Claude/Codex 辅助翻译，也可以由作者亲自撰写；网站展示保存在仓库中的内容，不使用浏览器实时翻译。
+
+### 文件、元数据与工具分工
+
+同一篇文章有两份文件、一个逻辑 ID：中文在 `src/content/notes/how-this-garden-works.md`，英文在 `src/content/notes-en/how-this-garden-works.md`。不要为英文添加 `-en` 后缀或另建中文目录里的“英文文章”。
+
+中文是内容及知识结构的主要来源。英文文件只保存 `title`、`description`、正文和 `translation` 块；`category`、`tags`、`published`、`contentType`、`series`、`order`、`related` 从中文合并，放入英文 Frontmatter 会被判为非法。
+
+| 工具 | 负责什么 | 不负责什么 |
+| --- | --- | --- |
+| `garden` CLI | 创建中文笔记、登记复习和修订 | 不创建英文译文 |
+| `translate:check` | 扫描文件、报告状态及原因 | 不调用 AI，不翻译或改写正文 |
+| Claude/Codex Agent | 按仓库 `AGENTS.md` 阅读中文及关联文章，撰写英文候选稿 | 不编造 Hash，不覆盖 Manual 内容 |
+| `translate apply/adopt/confirm` | 安装候选稿、接管人工修改或登记作者确认，维护元数据 | 不判断技术语义是否正确 |
+| GitHub Actions | 严格检查并构建、部署已提交文件 | 不自动调用 Agent 补译缺失英文 |
+
+`CLAUDE.md` 引用同一份 `AGENTS.md`，日常工作以其中的 “Translating notes” 及翻译规则为准。
+
+### 新建一篇双语文章
+
+延续前面的 `my-first-note` 示例，已创建中文文件时跳过第 1 步。以下命令均在仓库根目录执行。
+
+1. 运行 `npm run garden -- new`，将 Slug 填为 `my-first-note`，完成中文元数据。
+2. 编辑 `src/content/notes/my-first-note.md` 的正文。
+3. 运行 `npm run dev`，在 `http://localhost:4321/learning-garden/zh/notes/my-first-note/` 预览中文。开发环境允许英文尚未完成并输出警告；缺英文时英文页会回退中文并标注，不能据此认定已翻译。
+4. 另开终端运行 `npm run translate:check -- --note my-first-note`，新文章通常报告 `MISSING`。
+5. 在能访问此仓库的 Claude/Codex 会话中发出下面的翻译请求。**这是给 Agent 的自然语言指令，不是终端命令。**
+
+> 请遵循 AGENTS.md 的 Translating notes 规范，检查 my-first-note 的状态。仅在 MISSING 或 AUTO_STALE 时，阅读中文源文件及其关联文章，完整翻译标题、摘要与正文，将候选稿写入 .translations/my-first-note.md，再运行 npm run translate -- apply --note my-first-note。保留代码、公式、命令、路径与链接目标；调整英文标题的页内锚点。遇到人工版、AUTO_MODIFIED、INVALID 或 ORPHAN 时报告原因，不覆盖。完成后运行严格检查、构建和链接检查；不要提交、推送或部署。
+
+6. 检查 `src/content/notes-en/my-first-note.md` 的英文表述、代码、数字、公式和链接。候选稿 `.translations/my-first-note.md` 的 Frontmatter 只能有 `title`、`description`，正文写英文；`apply` 会生成完整 `translation` 块，成功后默认删除候选稿，`--keep` 可保留它。
+7. 刷新或重启开发服务，打开 `http://localhost:4321/learning-garden/en/notes/my-first-note/`，确认显示英文标题和正文。
+8. 运行 `npm run translate:check -- --strict`，再运行 `npm run verify`。状态检查通过不证明译文语义正确，仍需要阅读核对。
+9. 准备发布时运行 `git add src/content/notes/my-first-note.md src/content/notes-en/my-first-note.md`，检查 `git diff --cached`，再按发布章节提交。不要提交被忽略的 `.translations/` 候选稿。
+
+**预期结果：** 两种语言的文章路径末尾都是 `my-first-note/`，英文为 `AUTO_CURRENT`，没有新增第二篇逻辑文章。
+
+### 查看翻译状态
+
+查看全部文章用 `npm run translate:check`；单篇用 `npm run translate:check -- --note how-this-garden-works`；机器可读输出用 `npm run translate:check -- --json`。发布前用 `npm run translate:check -- --strict`，普通检查即使列出阻塞项也不以严格失败退出。
+
+实际状态名比 Missing / Current / Stale / Modified 更具体：
+
+| CLI 状态 | 含义 | 处理方式与发布影响 |
+| --- | --- | --- |
+| `MISSING` | 有中文，没有同 ID 英文 | Agent 生成候选稿并 `apply`；阻止发布 |
+| `AUTO_CURRENT` | 自动版内容、中文 Hash 和规则版本一致 | 读者仍需核对翻译质量；可发布 |
+| `AUTO_STALE` | 中文文本或翻译规则版本改变 | 更新候选稿并 `apply`；阻止发布 |
+| `AUTO_MODIFIED` | 英文文本与生成时 Hash 不同 | 作者选择保留人工修改或丢弃重译；阻止发布 |
+| `MANUAL_CURRENT` | 人工版已登记匹配当前中文 | 不自动覆盖；可发布 |
+| `MANUAL_STALE` | 中文变化后，人工版尚未重新确认 | 作者核对后 `confirm`；只警告，不阻止发布 |
+| `INVALID` | 文件或元数据非法，或内容保留／链接检查不通过 | 按具体原因修复；阻止发布 |
+| `ORPHAN` | 英文没有对应中文源文件 | 作者核对 ID、恢复来源或处理多余文件；阻止发布 |
+
+例如，新建但还没翻译时可能看到 `✗ MISSING        my-first-note`，摘要为 `1 note(s): MISSING 1`；安装成功后为 `✓ AUTO_CURRENT   my-first-note`。这些是流程示例输出，不是对当前仓库状态的断言。
+
+检查按优先级分类，不保证改中文后总是 `AUTO_STALE`：例如新增代码块、公式或文章链接后，旧自动版因保留内容不一致可能先成为 `INVALID`。此时 Agent 应报告，不能自行加覆盖参数。
+
+### 更新中文或英文后如何处理
+
+| 改动 | 下一步 |
+| --- | --- |
+| 中文 `title`、`description` 或正文改变 | 检查状态；Auto 通常需要重译，Manual 由作者核对。包括只改措辞的情况 |
+| 仅中文分类、Tag、专题、顺序、`related` 或发布日期改变 | 不影响源文本 Hash，通常重建即可；仍要通过结构校验，发布日期不应随意改动 |
+| 英文 Auto 的标题、摘要或正文被修改 | 通常成为 `AUTO_MODIFIED`，先保护修改并由作者决定归属 |
+| 英文 Manual 被人工修改 | 不与生成 Hash 比较，仍需校验链接、内容及事实；必要时核对中文后 `confirm` |
+
+Hash 对换行格式、Unicode 和部分首尾空白做标准化，所以这些等价格式变化不一定产生过期或修改状态。英文 Manual 的 `CURRENT` 只表示源 Hash 已确认，不代表每次后续人工编辑都被自动审阅。
+
+对于未编辑过的 Auto，如果作者检查确认中文改动完全不影响现有英文，也可用 `npm run translate -- confirm --note how-this-garden-works` 登记确认，而不是盲目重译；**不能用它掩盖未翻译的内容变化**。它不会更新正文，不接受 `AUTO_MODIFIED`、`MISSING` 或 `INVALID`。
+
+### Auto 与 Manual：Hash 和内容保护
+
+`translation.mode: auto` 表示由 Agent 维护的译文，不表示网站后台持续运行翻译。`sourceHash` 对应中文标题、摘要和正文；`generatedHash` 对应生成时的英文标题、摘要和正文；`rulesVersion` 对应当前翻译规范版本。全部由工具计算，不能手填或让模型编造。
+
+`translation.mode: manual` 表示作者负责的英文版本，可亲自撰写、从自动版润色，或在审核后接管。`apply` 拒绝覆盖任何 Manual 文件，Agent 也必须保持其字节不变。
+
+**安全接管 Auto：** 作者运行 `npm run translate -- adopt --note how-this-garden-works`，再编辑英文；若已经编辑 Auto，也可用同一命令保留修改。`adopt` 改为 Manual，删除 `generatedHash` 与 `rulesVersion`，保留正文和原 `sourceHash`。因此中文已变化时仍可能显示 `MANUAL_STALE`，并不意味着已经确认同步。作者核对或修订英文后再运行 `npm run translate -- confirm --note how-this-garden-works`；该命令更新源 Hash，不改英文正文。
+
+**丢弃修改重译：** 先让 Agent 准备并审阅候选稿，保留需要的人工文字后，只有作者决定丢弃修改时才运行 `npm run translate -- apply --note how-this-garden-works --discard-edits`。无效英文文件同样可能包含人工内容，只有作者允许替换时才使用 `--replace-invalid`。默认 `apply` 会拒绝这些情况，候选稿验证失败则回滚目标文件并保留候选稿。
+
+这两个覆盖参数都不能绕过 Manual 保护。要把 Manual 交回 Auto，作者必须先备份并明确解除保护；一个可审阅的做法是作者将英文文件移到内容目录外的备份位置，使同 ID 状态变为 `MISSING`，再审核候选稿并 `apply`。在重新生成、严格检查完成前不能发布。不要仅改 `mode`：Auto 还需要工具生成的合法 Hash 与规则版本。
+
+### 从零编写人工英文版
+
+当前没有单独的 `new-manual` 命令。无需手写 Hash 的办法是：作者先把自己的完整英文稿放到 `.translations/my-first-note.md`（只含标题、摘要和英文正文），对缺失英文或可更新的 Auto 运行 `npm run translate -- apply --note my-first-note`，确认通过后立即运行 `npm run translate -- adopt --note my-first-note`。这只是借用工具建立元数据，英文文本可以完全由作者写。
+
+由于首次安装仍走 Auto 校验，该候选稿要先保留代码块、公式、图片和文章链接；转为 Manual 后作者可以调整结构和表达重点。Manual 缺少部分保留内容通常只警告，但非法元数据和无效链接仍会阻止发布。作者完成事实核对后用 `confirm` 登记当前中文版本。
+
+项目介绍可以采用适合英文招聘阅读的“问题、个人职责、技术方案、结果与影响”表达，但技术结论、实验数字、职责及个人贡献必须准确，不得新增未验证成果。后续批量翻译不会覆盖 Manual；需要更新时由作者负责，不能等待自动刷新。
+
+### 为什么英文会阻止构建
+
+`npm run build` 先执行严格检查，内容加载阶段也验证双语状态。`MISSING`、`AUTO_STALE`、`AUTO_MODIFIED`、`INVALID`、`ORPHAN` 阻止正式构建；`MANUAL_STALE` 只警告。设计目的在于避免发布缺失、过期或有未确认人工修改的自动版，同时保留作者维护 Manual 的权利。
+
+排查顺序：运行 `npm run translate:check -- --strict` → 阅读每篇文章的状态和原因 → 补译或按作者决定处理保护状态 → 再次严格检查 → `npm run build` → `npm run check:links`。不要编辑 Hash 来消除错误。格式损坏的文件也可能无法在开发环境渲染，开发宽松并不是忽略所有非法数据。
+
+### 专题、知识图谱与学习日历
+
+两种语言共用 Slug、专题、Tag 和知识关系。`series`、`related`、Tag 只在中文源文件管理；英文专题目录使用成员的英文标题，英文图谱的文章节点使用英文标题、Topic 使用词表的英文名。英文新增的正文引用不会单独生成关系，图谱以中文源文件为准，检查器会对额外引用给出提示。
+
+新建英文文件不需要添加 Graph 节点，也不会增加站内日历的第二次发布记录；日期与活动都依赖同一个中文源 ID。当前问题文件没有独立英文集合，所以问题节点标题仍可能是中文。
+
+### 语言切换与对应 URL
+
+首次访问根路径 `/learning-garden/` 默认进入英文，不读取浏览器语言。点击页头 `中` 或 `EN` 会保存 `lg-lang` 偏好，之后从根路径进入时优先采用该偏好；直接访问语言路径不会改写偏好。
+
+本指南对应地址是 `https://boltzmamba.github.io/learning-garden/zh/notes/how-this-garden-works/` 和 `https://boltzmamba.github.io/learning-garden/en/notes/how-this-garden-works/`。点击语言切换保留相同文章路径，分别显示两份正文。也可直接访问 `/learning-garden/zh/` 或 `/learning-garden/en/`；当前部署路径需包含 `/learning-garden/`。
+
+### 英文文章常见问题
+
+| 问题 | 排查与处理 |
+| --- | --- |
+| 英文文章没有出现 | 检查 `notes-en` 目录、同名 `.md` 和状态；CLI 新建中文不会生成英文。处理后重启服务，线上还需提交两份文件并部署 |
+| 英文仍显示旧内容 | 运行单篇状态检查；检查是否 Stale、候选稿是否已 `apply`、是否重建及部署，不只刷新页面 |
+| 严格构建失败 | 阅读具体阻塞状态；缺失先补译，Modified 由作者选择保留或重译，Invalid 按原因修复；不能跳过门禁 |
+| 修改中文为什么要重新翻译 | 标题、摘要或正文的源 Hash 改变；需确认英文仍准确。只改结构字段通常无需翻译 |
+| 人工版为什么不自动更新 | Manual 受保护，需作者编辑并核对后 `confirm`；Agent 不覆盖 |
+| 改英文后为什么 Modified | Auto 英文文本与 `generatedHash` 不一致；保留修改用 `adopt`，不是重写 Hash |
+| 怎样避免覆盖人工文章 | 作者接管时使用 `adopt`，检查 mode 为 Manual；批量任务只处理 Missing 和 Auto Stale，不授权静默覆盖 |
+| 分类、Tag 或专题改变为何无需重译 | 结构字段不在源 Hash 中，页面从中文合并，重建即可；正文也改了则另需同步 |
+| 日历为何只计算一次 | 两个文件共享一个逻辑 ID 和中文发布日期，翻译不是新的站内发布事件 |
+| 英文图谱仍显示中文标题 | 区分文章、Topic 和问题；文章检查英文标题及是否开发回退，Topic 检查词表 `en`，问题目前共享原文；重启或重建 |
+| 如何检查英文内部链接 | 优先 `[[id]]` 或 `../id/`，英文页内锚点对应英文标题；构建后运行 `check:links`，并实际点开带片段的相对跨页链接，不能只依赖自动检查 |
 
 ## 编写和编辑 Markdown
 
@@ -224,6 +358,8 @@ $$
 
 外部链接写完整 URL。内部文章链接推荐 `../文章ID/`，可保留当前语言。不要直接链接 `other-note.md`：虽然图谱解析器能识别文件形式，浏览器不会因此得到静态文章页面，链接检查会失败。
 
+英文正文也使用 ID 形式的 Wiki Link 或相对文章链接，避免硬编码中文文章 URL。翻译页内目录时，锚点需对应英文标题；代码块里的中文教学示例保持原样，实际英文正文链接须检查目标标题。
+
 图片可放入 `public/images/`，例如 `public/images/agent-loop.png`，正文写 `![循环示意图](/learning-garden/images/agent-loop.png)`。URL 不含 `public`，但必须包含部署基路径 `/learning-garden/`。上面的 `favicon.svg` 是已有资源；自己的图片需要先放入目录。检查大小写，Windows 能打开的错误大小写路径可能在部署时失败。
 
 ### 编辑已有文章
@@ -231,7 +367,7 @@ $$
 1. 从文章 URL 最后一段取得 ID，如本页为 `how-this-garden-works`；也可点击文章下方的源码链接。
 2. 打开对应的 `src/content/notes/<id>.md`，修改正文或元数据，保留文件名和首次发布日期。
 3. 启动预览，检查标题、表格、代码、公式、图片与链接。
-4. 聚合信息未变化时重启服务；发布前执行 `npm run verify`。
+4. 中文标题、摘要或正文变化后检查并同步英文；仅结构字段变化通常只需重建。聚合信息未变化时重启服务，发布前执行 `npm run verify`。
 
 ## 管理栏目、标签与专题
 
@@ -291,13 +427,15 @@ order: 20
 
 重新构建后目录更新，开发中仍显示旧目录则重启服务。每篇文章最多属于一个专题，不支持嵌套；Overview 不能再设置 `series`。专题目录是**成员文章列表**，不是正文标题的自动 TOC。本指南的页内目录为手动维护。
 
+`series`、`order` 只在中文源文件维护；两种语言共用成员与顺序，英文目录使用英文标题。新建 Overview 和成员也都需要英文版才能正式构建。
+
 ## 维护和使用知识图谱
 
 **目标：** 让知识关联有明确依据，并在全局和局部视图中查阅。
 
 ### 节点、边与两种模式
 
-每篇文章对应一个节点，Overview 是带环的文章节点；公开问题对应问题节点；被使用的 Topic 及其祖先主题对应主题节点。边来自明确关系，在构建时生成：
+每个逻辑文章 ID 对应一个节点，中英文不会各建一个。Overview 是带环的文章节点；公开问题对应问题节点；被使用的 Topic 及其祖先主题对应主题节点。文章关系取自中文源文件，英文图谱替换文章与 Topic 显示名称。边来自明确关系，在构建时生成：
 
 | 数据来源 | 关系 | 展示模式 |
 | --- | --- | --- |
@@ -347,7 +485,7 @@ npm run garden -- new --title "ReAct" --slug react --category knowledge --tags "
 循环中的推理与行动可以结合 [ReAct](../react/) 理解。
 ```
 
-保存、重新构建后，Article Graph 出现 `Agent Loop → ReAct` 的引用关系；前者 Outlinks 包含后者，后者 Backlinks 包含前者。Topic Graph 中两篇文章分别连接 `ai-agent`，ReAct 还连接 `react-paradigm`。只添加相同标签而不写正文链接，不会在 Article Graph 产生引用边。
+保存并完成这两篇文章的英文同步、重新构建后，Article Graph 出现 `Agent Loop → ReAct` 的引用关系；前者 Outlinks 包含后者，后者 Backlinks 包含前者。Topic Graph 中两篇文章分别连接 `ai-agent`，ReAct 还连接 `react-paradigm`。只添加相同标签而不写正文链接，不会在 Article Graph 产生引用边。
 
 ### 实际操作
 
@@ -490,6 +628,8 @@ sources:
 
 不同类型不互相去重：同日发布、复习并修订同一文章可以有三项活动。浏览、保存文件和普通编辑不会自动生成站内学习事件。日期使用 `YYYY-MM-DD`，今天按 Asia/Singapore 计算。
 
+英文版与中文共用逻辑 ID 和 `published`，新增或更新英文不会增加第二次站内发布事件；GitHub 提交贡献仍按后文规则处理。
+
 ### GitHub Contributions 已接入
 
 日历还读取 `src/data/github-activity.json` 快照，当前账号是 `BoltzMamba`。主要来源为 GitHub GraphQL 贡献日历，包含 GitHub 实际统计的提交、PR、Issue、评审等；API 不可用时尝试公开贡献页面。它不扫描本机所有 Git 仓库，也不保证每个 Commit 都计数。
@@ -531,18 +671,19 @@ npm run github:check
 ```bash
 git status --short
 git diff
+npm run translate:check -- --strict
 npm run verify
 npm run preview
 ```
 
-在生产预览检查新文章、栏目、标签、专题、图谱、问答和日历，结束后停止预览。确认范围正确后暂存具体文件，例如仅更新本指南及修订记录：
+先处理翻译检查的阻塞项，再运行 `verify`；不能写完中文直接推送并期待 Actions 生成英文。生产预览检查两种语言的文章、栏目、标签、专题、图谱、问答和日历，结束后停止预览。确认范围正确后暂存具体文件，例如更新本指南中英文：
 ```bash
-git add src/content/notes/how-this-garden-works.md src/data/revisions.json
+git add src/content/notes/how-this-garden-works.md src/content/notes-en/how-this-garden-works.md
 git diff --cached
 git commit -m "docs: expand Learning Garden usage guide"
 ```
 
-新建文章或图片时替换成实际文件路径，包含必要的词表、问题及记录文件。不要提交 `dist/`、本地工具产物或凭据。再检查：
+新建文章或图片时替换成实际路径，包含必要的词表、问题及记录文件；实际登记了修订时再暂存 `src/data/revisions.json`。不要提交 `.translations/` 候选稿、`dist/`、本地工具产物或凭据。再检查：
 ```bash
 git branch --show-current
 git remote -v
@@ -559,7 +700,7 @@ git push origin main
 
 打开 [GitHub Actions](https://github.com/BoltzMamba/learning-garden/actions)，进入对应提交的 **Test and deploy to GitHub Pages**：
 
-1. 安装依赖、同步 GitHub 贡献，再执行测试、类型检查、构建和内部链接检查。
+1. 安装依赖、同步 GitHub 贡献，再执行测试、类型检查、严格英文检查、构建和内部链接检查。Actions 不调用 Agent 翻译；双语检查失败时不上传或部署，线上保留之前版本。
 2. PR 只检查不部署；`main` 推送、手动或定时运行满足条件时上传并部署 Pages。
 3. 检查 `build` 与 `deploy`，失败时展开最先失败的步骤，查看具体文件和错误。首次配置在 Settings → Pages 选择 GitHub Actions 为来源。
 4. 成功后访问[正式网站](https://boltzmamba.github.io/learning-garden/zh/)，从列表打开文章，核对正文与相关记录，也检查英文路径的同一文章。
@@ -586,11 +727,11 @@ git push origin main
 | GitHub 数量不符 | 对照账号日历，检查快照截止日期、凭据、私有贡献设置和去重模式，运行 `github:check`；本站合计不等于 GitHub 原始数 |
 | 提问后未出现在网站 | Issue 不自动同步，需站主创建 Markdown、设置 `public: true` 并发布 |
 | 问题状态构建失败 | `resolved` 必须有 `resolvedOn`，`open` 不得带该字段；检查关联文章存在 |
-| 英文页面仍是中文正文 | 当前双语界面共享正文，没有自动翻译或翻译版本管理 |
+| 英文页面仍是中文正文 | 开发时缺失英文可回退中文；检查同 ID 英文文件和翻译状态，处理后重启。正式构建不会允许缺失英文 |
 | `npm run build` 失败 | 从第一处错误查必填字段、日期、引用、重复记录、词表；确认 Node.js 版本和依赖 |
 | 本地成功但 Actions 失败 | 查失败步骤、漏提交文件、大小写、锁文件及本地与 CI 环境差异；部署失败再查 Pages 来源及权限 |
 
-尚未支持正文自动 TOC、嵌套或多重专题、文章翻译配对、实时评论与 Issue 自动同步、在线编辑、草稿定时发布和间隔复习调度。不要添加不存在的字段并假设功能会生效。
+尚未支持正文自动 TOC、嵌套或多重专题、实时评论与 Issue 自动同步、在线编辑、草稿定时发布和间隔复习调度。问答仍使用共享文件，没有笔记这样的独立英文版流程。不要添加不存在的字段并假设功能会生效。
 
 ## 隐私与安全
 
