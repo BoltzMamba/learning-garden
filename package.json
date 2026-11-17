@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "node scripts/translate.ts check --strict && astro build",
+    "build": "node scripts/translate.ts check --strict && node scripts/concepts.ts && astro build",
     "preview": "astro preview",
     "astro": "astro",
     "check": "astro check",
@@ -18,14 +18,21 @@
     "github:sync": "node scripts/github-activity.ts",
     "github:check": "node scripts/check-github-data.ts",
     "translate": "node scripts/translate.ts",
-    "translate:check": "node scripts/translate.ts check"
+    "translate:check": "node scripts/translate.ts check",
+    "concepts:check": "node scripts/concepts.ts"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.9",
     "@tailwindcss/vite": "^4.3.5",
     "astro": "^7.4.12",
     "d3-force": "^3.0.1",
+    "github-slugger": "^2.0.0",
     "katex": "^0.19.1",
+    "mdast-util-directive": "^3.2.0",
+    "micromark-extension-directive": "^4.0.0",
+    "micromark-util-chunked": "^2.0.1",
+    "micromark-util-classify-character": "^2.0.1",
+    "micromark-util-resolve-all": "^2.0.1",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0",
     "tailwindcss": "^4.3.5"

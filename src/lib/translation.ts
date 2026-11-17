@@ -19,6 +19,7 @@
 import { createHash } from 'node:crypto';
 import { parseFrontmatter } from '@astrojs/markdown-remark';
 import { extractNoteLinks, makeResolver, noteSlugFromHref, stripCode, type NoteRef } from './links.ts';
+import { scanConceptMarkup } from './concepts.ts';
 
 /**
  * Version of the translation rules (AGENTS.md → "Translating notes"). Bump it
@@ -196,6 +197,8 @@ export interface PreservedParts {
   mathBlocks: number;
   /** Absolute links into the Chinese site (/zh/…). */
   zhLinks: string[];
+  /** Colour marks and how often each occurs: "==" (yellow shorthand), "hl:<color>", "ink:<color>". */
+  marks: Record<string, number>;
 }
 
 const FENCE_RE = /^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\1[^\n]*$/gm;
@@ -218,7 +221,33 @@ export function preservedParts(body: string, id: string, refs: readonly NoteRef[
     codeBlocks: [...text.matchAll(FENCE_RE)].length,
     mathBlocks: (prose.match(/^\s*\$\$/gm) ?? []).length,
     zhLinks,
+    marks: countMarks(prose),
   };
+}
+
+/** :hl / :ink with a label of text, [single brackets] or [[wikilinks]], and optional {attributes}. */
+const MARK_DIRECTIVE_RE = /(?<![:\w]):(hl|ink)\[(?:[^[\]\n]|\[\[[^\]\n]*\]\]|\[[^[\]\n]*\])*\](?:\{([^}\n]*)\})?/g;
+
+/**
+ * Count colour marks in prose (code already removed; math removed here).
+ * Mirrors src/lib/remark-marks.ts closely enough to compare two languages.
+ */
+export function countMarks(prose: string): Record<string, number> {
+  const text = prose.replace(/\$\$[\s\S]*?\$\$/g, ' ').replace(/\$[^$\n]+\$/g, ' ');
+  const marks: Record<string, number> = {};
+  const add = (key: string) => (marks[key] = (marks[key] ?? 0) + 1);
+  const rest = text.replace(MARK_DIRECTIVE_RE, (_match, name: string, attrs: string | undefined) => {
+    const color = /(?:^|\s)color\s*=\s*["']?([\w-]+)/.exec(attrs ?? '')?.[1] ?? (name === 'hl' ? 'yellow' : 'default');
+    add(`${name}:${color}`);
+    return ' ';
+  });
+  const pairs = Math.floor((rest.match(/(?<![=\\])==(?!=)/g) ?? []).length / 2);
+  if (pairs) marks['=='] = pairs;
+  // Concept references and definition anchors keep their ids in every language.
+  const { references, anchors } = scanConceptMarkup(prose);
+  for (const id of references) add(`concept:${id}`);
+  for (const a of anchors) add(`dfn:${a}`);
+  return marks;
 }
 
 /**
@@ -240,6 +269,17 @@ export function compareParts(zh: PreservedParts, en: PreservedParts, mode: Trans
   for (const img of zh.images) if (!en.images.includes(img)) loss.push(`image "${img}" from the Chinese text is missing`);
   if (zh.codeBlocks !== en.codeBlocks) loss.push(`code blocks: Chinese has ${zh.codeBlocks}, English has ${en.codeBlocks}`);
   if (zh.mathBlocks !== en.mathBlocks) loss.push(`display formulas: Chinese has ${zh.mathBlocks}, English has ${en.mathBlocks}`);
+  for (const k of [...new Set([...Object.keys(zh.marks), ...Object.keys(en.marks)])].sort()) {
+    const [a, b] = [zh.marks[k] ?? 0, en.marks[k] ?? 0];
+    if (a === b) continue;
+    const [name, value] = k.split(':');
+    const label =
+      k === '==' ? '==…== highlights'
+      : name === 'concept' ? `:concept[…]{id="${value}"} references`
+      : name === 'dfn' ? `:dfn[…]{#${value}} anchors`
+      : `:${name}[…]{color="${value}"} marks`;
+    loss.push(`${label}: Chinese has ${a}, English has ${b} (keep every colour mark and its colour)`);
+  }
   for (const l of en.zhLinks) warnings.push(`"${l}" sends English readers to the Chinese site; use [[id]] or ../id/ to stay in the reader's language`);
   return { errors, warnings };
 }

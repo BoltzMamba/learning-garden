@@ -39,6 +39,28 @@
   --cal-3: #3f9a7c;
   --cal-4: #1f6b54;
   --focus: #1f6b54;
+  /* Article marks (light): text colours :ink[…]{color} and highlights ==…== / :hl[…]{color}.
+     Contrast on --bg ≥ 4.5:1; text on every highlight ≥ 11:1. */
+  --ink-default: var(--text);
+  --ink-gray: #5f7073;
+  --ink-blue: #3c6b96;
+  --ink-red: #a84f5d;
+  --ink-yellow: #8a6522;
+  --highlight-red: #f4dce0;
+  --highlight-yellow: #f3e9c5;
+  --highlight-blue: #dbe9f3;
+  --highlight-green: #dcece2;
+  --highlight-pink: #f1deeb;
+  --highlight-foreground: var(--text);
+  /* Coloured text inside a highlight is pulled toward this colour so it stays ≥ 4.5:1. */
+  --ink-on-highlight-anchor: var(--text);
+  --ink-on-highlight-strength: 75%;
+  /* Light mode: flat paper marker, no edge. */
+  --highlight-edge-red: transparent;
+  --highlight-edge-yellow: transparent;
+  --highlight-edge-blue: transparent;
+  --highlight-edge-green: transparent;
+  --highlight-edge-pink: transparent;
 }
 
 :root[data-theme='dark'] {
@@ -79,6 +101,26 @@
   --cal-3: #4c9a7f;
   --cal-4: #8fd3b9;
   --focus: #a3dcc8;
+  /* Article marks (dark, soft neon): brighter inks; saturated deep highlights
+     with a thin neon underline edge instead of a glow. Text on highlights ≥ 6.4:1. */
+  --ink-default: var(--text);
+  --ink-gray: #a5b4b5;
+  --ink-blue: #92b9e0;
+  --ink-red: #e5a0a8;
+  --ink-yellow: #e1c181;
+  --highlight-red: #713a49;
+  --highlight-yellow: #6a521d;
+  --highlight-blue: #294e75;
+  --highlight-green: #225b4a;
+  --highlight-pink: #6f3b69;
+  --highlight-foreground: var(--text);
+  --ink-on-highlight-anchor: #ffffff;
+  --ink-on-highlight-strength: 60%;
+  --highlight-edge-red: color-mix(in srgb, #e58ca3 55%, transparent);
+  --highlight-edge-yellow: color-mix(in srgb, #edd17b 50%, transparent);
+  --highlight-edge-blue: color-mix(in srgb, #86bded 55%, transparent);
+  --highlight-edge-green: color-mix(in srgb, #83d8ae 50%, transparent);
+  --highlight-edge-pink: color-mix(in srgb, #e6a0d9 55%, transparent);
 }
 
 @theme inline {
@@ -283,6 +325,80 @@ button.chip:hover {
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0.25em 0;
+}
+
+/* Article marks (src/lib/remark-marks.ts). Only these class names are ever emitted. */
+.prose .ink {
+  color: var(--ink-color);
+}
+.prose .ink-default { --ink-color: var(--ink-default); }
+.prose .ink-gray { --ink-color: var(--ink-gray); }
+.prose .ink-blue { --ink-color: var(--ink-blue); }
+.prose .ink-red { --ink-color: var(--ink-red); }
+.prose .ink-yellow { --ink-color: var(--ink-yellow); }
+
+.prose .hl {
+  color: var(--highlight-foreground);
+  background: var(--hl-bg);
+  box-shadow: inset 0 -0.12em 0 var(--hl-edge);
+  padding: 0.05em 0.18em;
+  border-radius: 3px;
+  /* Each wrapped line keeps its own padding and corners. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.prose .hl-red { --hl-bg: var(--highlight-red); --hl-edge: var(--highlight-edge-red); }
+.prose .hl-yellow { --hl-bg: var(--highlight-yellow); --hl-edge: var(--highlight-edge-yellow); }
+.prose .hl-blue { --hl-bg: var(--highlight-blue); --hl-edge: var(--highlight-edge-blue); }
+.prose .hl-green { --hl-bg: var(--highlight-green); --hl-edge: var(--highlight-edge-green); }
+.prose .hl-pink { --hl-bg: var(--highlight-pink); --hl-edge: var(--highlight-edge-pink); }
+/* Coloured text inside a highlight: same hue, pulled toward the readable end. */
+.prose .hl .ink {
+  color: color-mix(in srgb, var(--ink-color) var(--ink-on-highlight-strength), var(--ink-on-highlight-anchor));
+}
+.prose .hl .ink-default {
+  color: var(--highlight-foreground);
+}
+/* Links inside a highlight keep the readable text colour; the accent underline marks them. */
+.prose .hl a {
+  color: inherit;
+  text-decoration-color: var(--accent);
+}
+.prose .hl code {
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
+
+/* Concepts (src/lib/remark-concepts.ts, src/components/ConceptLayer.astro).
+   Off (default): references are plain text. On: a quiet dotted underline —
+   distinct from links (solid accent) and from highlights (background). */
+:root {
+  --concept-underline: color-mix(in srgb, var(--accent) 55%, var(--text-muted));
+  --concept-card-shadow: 0 6px 20px rgba(31, 42, 46, 0.12);
+}
+:root[data-theme='dark'] {
+  --concept-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+:root[data-concepts='on'] .prose .concept {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: var(--concept-underline);
+  text-underline-offset: 0.24em;
+  cursor: help;
+}
+:root[data-concepts='on'] .prose .concept:hover,
+:root[data-concepts='on'] .prose .concept:focus-visible {
+  text-decoration-color: var(--accent);
+}
+.prose dfn.concept-def {
+  font-style: normal;
+  scroll-margin-top: 5rem;
+}
+/* Arriving from a concept card: briefly show where the definition is. */
+.prose dfn.concept-def:target {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 0.15em var(--accent-soft);
+  border-radius: 2px;
 }
 
 /* Shiki dual themes: light is inline; switch to the dark variables in dark mode. */

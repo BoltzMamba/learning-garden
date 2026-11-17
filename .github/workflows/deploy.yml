@@ -56,6 +56,8 @@ jobs:
       # live site keeps its previous version. (`npm run build` checks again.)
       - name: Check English translations (strict)
         run: npm run translate:check -- --strict
+      - name: Check the Concept Registry (sources and anchors in both languages)
+        run: npm run concepts:check
       - name: Build
         run: npm run build
       - name: Check internal links

@@ -24,6 +24,8 @@ import {
 import { validateReviewRecords, validateRevisionRecords, type RevisionRecord } from './records.ts';
 import { localizeNotes, localizeSeries, titleLabels, type ContentLang, type LocalNote } from './bilingual.ts';
 import { formatScan, scanTranslations, type TranslationScan } from './translation-check.ts';
+import { checkConcepts } from './concepts-check.ts';
+import type { Concept } from './concepts.ts';
 
 /** A note's Chinese source entry: the structure of every logical note. */
 export type SourceNote = CollectionEntry<'notes'>;
@@ -45,6 +47,8 @@ interface GardenData {
   /** Per-language views; same notes, same order, localised text. */
   views: Record<ContentLang, LanguageData>;
   translations: TranslationScan;
+  /** Concept Registry (src/data/concepts.json), validated. */
+  concepts: Map<string, Concept>;
   questions: Question[];
   publicQuestions: Question[];
   events: ActivityEvent[];
@@ -98,6 +102,15 @@ async function load(): Promise<GardenData> {
     }
   }
   const statuses = new Map(translations.notes.map((n) => [n.id, n.status]));
+
+  // Concept Registry: sources, anchors and references must resolve in both languages.
+  const conceptScan = checkConcepts(process.cwd());
+  for (const w of conceptScan.warnings) console.warn(`[concepts] ${w}`);
+  if (conceptScan.errors.length) {
+    const message = ['Concept Registry problems (run `npm run concepts:check`):', ...conceptScan.errors].join('\n  ');
+    if (import.meta.env.DEV) console.warn(message);
+    else throw new Error(message);
+  }
   const questions = (await getCollection('questions')).sort((a, b) => b.data.created.localeCompare(a.data.created));
   const reviews = validateReviewRecords(reviewsJson, 'src/data/reviews.json');
   const revisions = validateRevisionRecords(revisionsJson, 'src/data/revisions.json');
@@ -193,6 +206,7 @@ async function load(): Promise<GardenData> {
     sources: notes,
     views: { zh: view('zh'), en: view('en') },
     translations,
+    concepts: conceptScan.concepts,
     questions,
     publicQuestions: questions.filter((q) => q.data.public),
     events,

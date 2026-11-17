@@ -1,0 +1,249 @@
+---
+/**
+ * Concept Mode for one note page: a hidden glossary of the concepts the note
+ * references (in the page language, with real links to their definition
+ * anchors — so `npm run check:links` verifies every source), one floating card,
+ * and the behaviour.
+ *
+ *   Off (default)  terms are plain text: no styling, no focus stops, no card.
+ *   On             terms get a quiet dotted underline; hover / focus / tap shows
+ *                  the card; click or Enter opens the definition source.
+ *
+ * The choice is remembered (`lg-concepts`) and applied before first paint by
+ * BaseLayout, so every note page behaves the same.
+ */
+import { useTranslations, type Lang } from '../i18n/ui.ts';
+
+export interface ConceptEntry {
+  id: string;
+  term: string;
+  /** The term in the other language, if different. */
+  otherTerm?: string;
+  otherLang: string;
+  definition: string;
+  sourceTitle: string;
+  href: string;
+}
+
+interface Props {
+  lang: Lang;
+  concepts: ConceptEntry[];
+}
+const { lang, concepts } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<div hidden data-concept-glossary>
+  {
+    concepts.map((c) => (
+      <div data-concept-entry={c.id}>
+        <span data-term>{c.term}</span>
+        {c.otherTerm && (
+          <span data-other lang={c.otherLang}>
+            {c.otherTerm}
+          </span>
+        )}
+        <span id={`concept-desc-${c.id}`} data-definition>
+          {c.definition}
+        </span>
+        <a data-source href={c.href}>
+          {c.sourceTitle}
+        </a>
+      </div>
+    ))
+  }
+</div>
+
+<div class="concept-card" data-concept-card hidden>
+  <p class="concept-card-head"><strong data-card-term></strong> <span class="concept-card-other" data-card-other></span></p>
+  <p class="concept-card-def" data-card-definition></p>
+  <p class="concept-card-source">
+    <a class="link" data-card-link>{t('concepts.source')} →</a>
+    <span class="concept-card-from" data-card-from></span>
+  </p>
+</div>
+
+<script>
+  import { placeCard } from '../scripts/concept-card.ts';
+
+  const root = document.documentElement;
+  const toggle = document.querySelector<HTMLButtonElement>('[data-concept-toggle]');
+  const card = document.querySelector<HTMLElement>('[data-concept-card]')!;
+  const terms = [...document.querySelectorAll<HTMLElement>('.prose .concept[data-concept]')];
+  const entry = (id: string) => document.querySelector<HTMLElement>(`[data-concept-entry="${CSS.escape(id)}"]`);
+  const field = (el: Element, sel: string) => el.querySelector<HTMLElement>(sel);
+
+  let current: HTMLElement | undefined;
+  let hideTimer: number | undefined;
+  let lastPointer = 'mouse';
+
+  const isOn = () => root.dataset.concepts === 'on';
+  const hrefOf = (term: HTMLElement) => entry(term.dataset.concept!)?.querySelector<HTMLAnchorElement>('[data-source]')?.href;
+
+  function setMode(on: boolean, remember: boolean) {
+    root.dataset.concepts = on ? 'on' : 'off';
+    toggle?.setAttribute('aria-pressed', String(on));
+    for (const term of terms) {
+      if (on) {
+        term.tabIndex = 0;
+        term.setAttribute('role', 'link');
+        term.setAttribute('aria-describedby', `concept-desc-${term.dataset.concept}`);
+      } else {
+        term.removeAttribute('tabindex');
+        term.removeAttribute('role');
+        term.removeAttribute('aria-describedby');
+      }
+    }
+    if (!on) hide();
+    if (remember) {
+      try {
+        localStorage.setItem('lg-concepts', on ? 'on' : 'off');
+      } catch {
+        /* storage unavailable: the choice applies to this page only */
+      }
+    }
+  }
+
+  function position() {
+    if (!current) return;
+    const p = placeCard([...current.getClientRects()], { width: card.offsetWidth, height: card.offsetHeight }, { width: innerWidth, height: innerHeight });
+    card.style.top = `${p.top}px`;
+    card.style.left = `${p.left}px`;
+    card.dataset.side = p.side;
+  }
+
+  function show(term: HTMLElement) {
+    const e = entry(term.dataset.concept!);
+    if (!e || !isOn()) return;
+    clearTimeout(hideTimer);
+    current = term;
+    field(card, '[data-card-term]')!.textContent = field(e, '[data-term]')!.textContent;
+    const other = field(e, '[data-other]');
+    const otherEl = field(card, '[data-card-other]')!;
+    otherEl.textContent = other?.textContent ?? '';
+    if (other?.lang) otherEl.lang = other.lang;
+    field(card, '[data-card-definition]')!.textContent = field(e, '[data-definition]')!.textContent;
+    const source = e.querySelector<HTMLAnchorElement>('[data-source]')!;
+    const link = card.querySelector<HTMLAnchorElement>('[data-card-link]')!;
+    link.href = source.href;
+    field(card, '[data-card-from]')!.textContent = source.textContent;
+    card.hidden = false;
+    position();
+  }
+
+  function hide() {
+    clearTimeout(hideTimer);
+    card.hidden = true;
+    current = undefined;
+  }
+  const hideSoon = () => {
+    clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(hide, 180);
+  };
+
+  function open(term: HTMLElement) {
+    const href = hrefOf(term);
+    if (href) location.href = href;
+  }
+
+  for (const term of terms) {
+    // A tap also focuses the term (which opens the card), so decide toggle-vs-open
+    // from the state before that happens.
+    let openBeforeTap = false;
+    term.addEventListener('pointerdown', (e) => {
+      lastPointer = e.pointerType;
+      openBeforeTap = current === term && !card.hidden;
+    });
+    term.addEventListener('pointerenter', (e) => {
+      if (e.pointerType !== 'touch') show(term);
+    });
+    term.addEventListener('pointerleave', (e) => {
+      if (e.pointerType !== 'touch') hideSoon();
+    });
+    term.addEventListener('focus', () => show(term));
+    term.addEventListener('blur', (e) => {
+      if (!card.contains(e.relatedTarget as Node)) hideSoon();
+    });
+    term.addEventListener('click', (e) => {
+      if (!isOn()) return;
+      e.preventDefault();
+      // Touch: the first tap opens the card (its link leads to the source); never jump away blindly.
+      if (lastPointer === 'touch') {
+        if (openBeforeTap) hide();
+        else show(term);
+      } else open(term);
+    });
+    term.addEventListener('keydown', (e) => {
+      if (!isOn()) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        open(term);
+      } else if (e.key === 'Escape') hide();
+    });
+  }
+
+  card.addEventListener('pointerenter', () => clearTimeout(hideTimer));
+  card.addEventListener('pointerleave', (e) => {
+    if (e.pointerType !== 'touch') hideSoon();
+  });
+  card.addEventListener('focusout', (e) => {
+    if (!card.contains(e.relatedTarget as Node) && e.relatedTarget !== current) hideSoon();
+  });
+  document.addEventListener('pointerdown', (e) => {
+    const target = e.target as Node;
+    if (!card.hidden && !card.contains(target) && !(current && current.contains(target))) hide();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || card.hidden) return;
+    const back = card.contains(document.activeElement) ? current : undefined;
+    hide();
+    back?.focus();
+  });
+  addEventListener('scroll', position, { passive: true });
+  addEventListener('resize', hide);
+
+  toggle?.addEventListener('click', () => setMode(!isOn(), true));
+  setMode(isOn(), false);
+</script>
+
+<style>
+  .concept-card {
+    position: fixed;
+    z-index: 60;
+    width: max-content;
+    max-width: min(22rem, calc(100vw - 16px));
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--concept-card-shadow);
+    font-size: 14px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+  .concept-card[hidden] {
+    display: none;
+  }
+  .concept-card p {
+    margin: 0;
+  }
+  .concept-card-other {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .concept-card .concept-card-def {
+    margin-top: 4px;
+  }
+  .concept-card .concept-card-source {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    font-size: 13px;
+  }
+  .concept-card-from {
+    color: var(--text-muted);
+  }
+</style>

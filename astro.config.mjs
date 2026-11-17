@@ -2,9 +2,7 @@
 import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import { unified } from '@astrojs/markdown-remark';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import remarkWikilinks from './src/lib/remark-wikilinks.ts';
+import { markdownProcessorOptions, shikiConfig } from './src/lib/markdown.ts';
 
 // Project site on GitHub Pages: https://boltzmamba.github.io/learning-garden/
 export default defineConfig({
@@ -14,12 +12,10 @@ export default defineConfig({
   output: 'static',
   build: { format: 'directory' },
   markdown: {
-    // The unified (remark/rehype) processor: KaTeX math + [[wikilinks]] between notes.
-    processor: unified({ remarkPlugins: [remarkMath, remarkWikilinks], rehypePlugins: [rehypeKatex] }),
-    shikiConfig: {
-      themes: { light: 'github-light', dark: 'github-dark-dimmed' },
-      wrap: false,
-    },
+    // The unified (remark/rehype) processor: KaTeX math, colour marks and
+    // [[wikilinks]] between notes (see src/lib/markdown.ts).
+    processor: unified(markdownProcessorOptions),
+    shikiConfig,
   },
   vite: {
     plugins: [tailwindcss()],

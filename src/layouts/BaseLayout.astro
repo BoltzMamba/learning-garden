@@ -50,6 +50,10 @@ const canonical = new URL(localePath(lang, path), Astro.site);
         try { stored = localStorage.getItem('lg-theme'); } catch (e) {}
         var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        // Concept Mode is off unless the reader turned it on (src/components/ConceptLayer.astro).
+        var concepts = null;
+        try { concepts = localStorage.getItem('lg-concepts'); } catch (e) {}
+        document.documentElement.dataset.concepts = concepts === 'on' ? 'on' : 'off';
       })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
