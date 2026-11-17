@@ -1,1 +1,143 @@
-{}
+{
+  "ai-agent": {
+    "zh": {
+      "term": "AI Agent",
+      "aliases": [
+        "Agent",
+        "智能体"
+      ],
+      "definition": "以 LLM 作为大脑，结合规划、记忆和工具使用，能够自主决定下一步行动并完成复杂任务的系统。"
+    },
+    "en": {
+      "term": "AI agent",
+      "aliases": [
+        "agent"
+      ],
+      "definition": "A system that uses an LLM as its brain and combines planning, memory and tool use to decide its next actions and complete complex tasks."
+    },
+    "source": {
+      "note": "agent-learning-01",
+      "anchor": "what-is-an-agent"
+    }
+  },
+  "llm-context": {
+    "zh": {
+      "term": "上下文",
+      "aliases": [
+        "Context"
+      ],
+      "definition": "模型在当前这一次推理中能够直接看到的信息；不在其中的历史信息，模型无法可靠访问。"
+    },
+    "en": {
+      "term": "context",
+      "definition": "The information the model can see directly during the current inference; past information not included in it cannot be reliably accessed."
+    },
+    "source": {
+      "note": "agent-learning-01",
+      "anchor": "llm-context"
+    }
+  },
+  "task-decomposition": {
+    "zh": {
+      "term": "任务分解",
+      "aliases": [
+        "Task Decomposition"
+      ],
+      "definition": "把复杂任务拆分为更容易处理的子任务或子目标，并决定执行顺序。"
+    },
+    "en": {
+      "term": "task decomposition",
+      "definition": "Breaking a complex task into smaller subtasks or subgoals that are easier to handle, and deciding the order to carry them out."
+    },
+    "source": {
+      "note": "agent-learning-01",
+      "anchor": "task-decomposition"
+    }
+  },
+  "chain-of-thought": {
+    "zh": {
+      "term": "思维链",
+      "aliases": [
+        "CoT",
+        "Chain of Thought"
+      ],
+      "definition": "让模型沿一条推理路径，把问题拆解为连续的中间步骤，而不是直接给出最终答案。"
+    },
+    "en": {
+      "term": "Chain of Thought",
+      "aliases": [
+        "CoT"
+      ],
+      "definition": "A technique where the model follows a single reasoning path, breaking a problem into intermediate steps instead of answering directly."
+    },
+    "source": {
+      "note": "agent-learning-01",
+      "anchor": "chain-of-thought"
+    }
+  },
+  "react": {
+    "zh": {
+      "term": "ReAct",
+      "definition": "将推理（Reasoning）与行动（Acting）结合，让模型在思考与外部操作之间反复切换。"
+    },
+    "en": {
+      "term": "ReAct",
+      "definition": "An approach that combines reasoning and acting, letting the model alternate between thinking and external actions."
+    },
+    "source": {
+      "note": "agent-learning-01",
+      "anchor": "react"
+    }
+  },
+  "short-term-memory": {
+    "zh": {
+      "term": "短期记忆",
+      "aliases": [
+        "Short-Term Memory"
+      ],
+      "definition": "Agent 当前上下文中的信息，只在本次推理中可直接使用。"
+    },
+    "en": {
+      "term": "short-term memory",
+      "definition": "The information in an agent's current context, directly usable only in the current inference."
+    },
+    "source": {
+      "note": "agent-learning-01",
+      "anchor": "short-term-memory"
+    }
+  },
+  "long-term-memory": {
+    "zh": {
+      "term": "长期记忆",
+      "aliases": [
+        "Long-Term Memory"
+      ],
+      "definition": "Agent 把需要保留的信息持久化到模型上下文之外的存储（如向量数据库），并按当前任务按需检索。"
+    },
+    "en": {
+      "term": "long-term memory",
+      "definition": "Information an agent persists outside the model's context, such as in a vector database, and retrieves on demand for the current task."
+    },
+    "source": {
+      "note": "agent-learning-01",
+      "anchor": "long-term-memory"
+    }
+  },
+  "tool-use": {
+    "zh": {
+      "term": "工具使用",
+      "aliases": [
+        "Tool Use"
+      ],
+      "definition": "Agent 调用搜索引擎、代码执行环境、数据库等外部工具或 API，获取最新信息或完成模型无法直接执行的操作。"
+    },
+    "en": {
+      "term": "tool use",
+      "definition": "An agent calling external tools or APIs, such as search, code execution or databases, to get up-to-date information or perform actions the model cannot do itself."
+    },
+    "source": {
+      "note": "agent-learning-01",
+      "anchor": "tool-use"
+    }
+  }
+}
