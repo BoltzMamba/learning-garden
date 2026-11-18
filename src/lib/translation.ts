@@ -15,11 +15,18 @@
  * Hashes are computed here, never written by hand or by a model. Structural
  * frontmatter changes (series, related, order, tags…) do not change the
  * source hash: they only need a rebuild, not a new translation.
+ *
+ * Learning experiments keep both languages in the Chinese frontmatter
+ * (`experiments[].title/description/requirements` with `zh` and `en`). Their
+ * Chinese text is part of the source hash, so editing it makes the English
+ * edition stale until the `en` text is reviewed; notes without experiments
+ * hash exactly as before.
  */
 import { createHash } from 'node:crypto';
 import { parseFrontmatter } from '@astrojs/markdown-remark';
 import { extractNoteLinks, makeResolver, noteSlugFromHref, stripCode, type NoteRef } from './links.ts';
 import { scanConceptMarkup } from './concepts.ts';
+import { experimentSourceText } from './experiments.ts';
 
 /**
  * Version of the translation rules (AGENTS.md → "Translating notes"). Bump it
@@ -53,7 +60,19 @@ export const TRANSLATION_MODES = ['auto', 'manual'] as const;
 export type TranslationMode = (typeof TRANSLATION_MODES)[number];
 
 /** Frontmatter keys that belong to the Chinese source only. */
-export const STRUCTURAL_KEYS = ['category', 'tags', 'published', 'contentType', 'series', 'order', 'related'] as const;
+export const STRUCTURAL_KEYS = [
+  'category',
+  'tags',
+  'published',
+  'contentType',
+  'series',
+  'order',
+  'related',
+  'experiments',
+  'projectTier',
+  'experimentId',
+  'sourceNote',
+] as const;
 const EN_KEYS = new Set(['title', 'description', 'translation']);
 const TRANSLATION_KEYS = new Set(['mode', 'sourceHash', 'generatedHash', 'rulesVersion']);
 export const HASH_RE = /^sha256:[0-9a-f]{64}$/;
@@ -86,17 +105,22 @@ export interface TextContent {
   title: string;
   description: string;
   body: string;
+  /** Chinese experiment text (see experimentSourceText); omitted or empty for most notes. */
+  experiments?: readonly (readonly string[])[];
 }
 
 const HASH_DOMAIN = 'learning-garden/translation-text/v1';
 
-/** SHA-256 over the normalised title, description and body (and nothing else). */
+/** SHA-256 over the normalised title, description, body and (when present) experiment text. */
 export function hashContent(content: TextContent): string {
+  const experiments = (content.experiments ?? []).map((e) => e.map(normalizeField));
   const canonical = JSON.stringify([
     HASH_DOMAIN,
     normalizeField(content.title),
     normalizeField(content.description),
     normalizeBody(content.body),
+    // Appended only when present, so notes without experiments keep their hashes.
+    ...(experiments.length ? [['experiments', experiments]] : []),
   ]);
   return `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`;
 }
@@ -334,7 +358,12 @@ export function classifyTranslation(input: ClassifyInput): NoteTranslationReport
   }
   const zhTitle = typeof zh.frontmatter.title === 'string' ? zh.frontmatter.title : '';
   const zhDescription = typeof zh.frontmatter.description === 'string' ? zh.frontmatter.description : '';
-  const sourceHash = hashContent({ title: zhTitle, description: zhDescription, body: zh.body });
+  const sourceHash = hashContent({
+    title: zhTitle,
+    description: zhDescription,
+    body: zh.body,
+    experiments: experimentSourceText(zh.frontmatter.experiments),
+  });
 
   if (enText === undefined) {
     return report('MISSING', { sourceHash, reasons: [`no English file src/content/notes-en/${id}.md`] });
@@ -374,7 +403,7 @@ export function classifyTranslation(input: ClassifyInput): NoteTranslationReport
     }
     if (parts.errors.length) return report('INVALID', { sourceHash, mode, reasons: parts.errors, warnings });
     const stale: string[] = [];
-    if (en.translation.sourceHash !== sourceHash) stale.push('the Chinese title, description or body changed since this translation');
+    if (en.translation.sourceHash !== sourceHash) stale.push('the Chinese title, description, body or experiment text changed since this translation');
     if ((en.translation.rulesVersion ?? 0) < rules) {
       stale.push(`translated under rules v${en.translation.rulesVersion}; current rules are v${rules}`);
     } else if ((en.translation.rulesVersion ?? 0) > rules) {
@@ -390,7 +419,7 @@ export function classifyTranslation(input: ClassifyInput): NoteTranslationReport
       sourceHash,
       mode,
       reasons: [
-        'the Chinese text changed since the English edition was last confirmed; check facts, results and contributions, then `npm run translate -- confirm --note ' + id + '`',
+        'the Chinese text (or experiment text) changed since the English edition was last confirmed; check facts, results, contributions and the `en` text of any experiments, then `npm run translate -- confirm --note ' + id + '`',
       ],
       warnings,
     });

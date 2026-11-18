@@ -65,6 +65,54 @@ npm run garden -- new --type overview --title "AI Agent" --slug ai-agents-overvi
 npm run garden -- new --title "MCP 基础" --slug mcp-basics --category knowledge --series ai-agents-overview --order 20 --tags mcp --description "..."
 ```
 
+## Learning experiments
+
+A knowledge note can end with a few small hands-on experiments that test what it explains (roughly 30 minutes to 2 hours each). They are optional: add one only when building it would sharpen your understanding. The workflow with Claude Code or Codex (propose → you confirm → register → build → complete) is in `AGENTS.md` → "Learning Experiments".
+
+**Register (planned).** Add `experiments` to the Chinese note. Both languages live here, so there is one copy of each requirement. The English edition needs no change of its own.
+
+```yaml
+experiments:
+  - id: minimal-react-agent        # stable, global id; never rename it
+    category: agent-learning       # agent-learning | ai-fundamentals | algorithms | ai-engineering
+    status: planned                # planned | in-progress | completed
+    public: true                   # false hides it on the site (the repo itself stays public)
+    title: { zh: "从零实现最小 ReAct Agent", en: "Build a Minimal ReAct Agent" }
+    description: { zh: "不依赖 Agent Framework，实现最小工具调用循环。", en: "Implement a minimal tool-calling loop without an agent framework." }
+    requirements:                  # acceptance criteria; cards show 4, the rest fold away
+      - { zh: "实现 Agent Loop", en: "Implement the agent loop" }
+      - { zh: "处理工具执行异常", en: "Handle tool execution failures" }
+```
+
+Public experiments appear as cards in a **Hands-on** section under the note's body. A note without experiments shows nothing extra.
+
+**Complete.** Set `status: completed` and add result links, an article, or both. Links are only allowed once work has started (`in-progress` or `completed`):
+
+```yaml
+    status: completed
+    links:
+      - { kind: code, url: "https://github.com/<you>/minimal-react-agent" }   # code | demo | result
+      - { kind: demo, url: "https://…", label: { zh: "在线演示", en: "Live demo" } }   # label is optional
+```
+
+**Optional project article.** Create a note in the `projects` section and link it to the experiment. Don't repeat the requirements; the article page shows them from the source note under **Related Knowledge**, and the note's card links to the article. The article is bilingual like every note (`npm run translate`). It publishes together with its experiment: until the experiment is `completed`, the article is an unpublished draft. A draft gets no page, no list entry, no graph node and no calendar event, and it never blocks the build, even without an English edition. You can create it early and fill it in while you work. Set its `published` date to the day you complete it, and make sure it has an English edition by then.
+
+```yaml
+category: "projects"
+projectTier: experiment            # featured (the default when omitted) | experiment
+experimentId: minimal-react-agent
+sourceNote: react-agent-loop       # the note that defines the experiment
+```
+
+**Where things show up.**
+- Projects lists **featured** projects only. Project articles without `projectTier` stay featured.
+- **More Experiments** (`/projects/experiments/`, filterable by category) lists only experiments that are completed, public, and have a link or an article. Planned and in-progress experiments appear only on their note, and their cards link to the article only after it is published.
+- The graph and the learning calendar ignore experiments: no nodes, no edges, no activity. Publishing a project article counts once, like any note.
+
+**Checks.** The build fails on an invalid id, category or status, on missing `zh`/`en` text, on empty requirements, on a non-http(s) link, or on a link attached to a planned experiment. It also fails on a duplicate id, on a project article whose experiment doesn't exist or whose `sourceNote` doesn't define it, on two articles for one experiment, on an article that names itself, on a featured project carrying `experimentId`, and on an article for a non-public experiment. The rules live in `src/lib/experiments.ts`.
+
+**Translation.** The Chinese experiment text (titles, descriptions, requirements) is part of the note's translation source hash. Editing it marks the English edition stale until the `en` text has been reviewed. Changing `status`, `links` or `public` never does.
+
 ## Knowledge graph
 
 `/graph/` has two views built from one set of build-time data (`src/lib/graph.ts`):

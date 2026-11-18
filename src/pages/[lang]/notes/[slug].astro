@@ -13,6 +13,8 @@ import GraphView from '../../../components/GraphView.astro';
 import TopicChips from '../../../components/TopicChips.astro';
 import ConceptLayer from '../../../components/ConceptLayer.astro';
 import MermaidDiagrams from '../../../components/MermaidDiagrams.astro';
+import ExperimentCard from '../../../components/ExperimentCard.astro';
+import { localizeExperiment, noteExperiments } from '../../../lib/experiments.ts';
 
 export async function getStaticPaths() {
   // One page per logical note and language (ids come from the Chinese source).
@@ -23,7 +25,7 @@ export async function getStaticPaths() {
 const lang = Astro.params.lang as Lang;
 const t = useTranslations(lang);
 const locale = intlLocale[lang];
-const { notesById, revisionsByNote, reviewDatesByNote, publicQuestions, graph, vocab, topicsByNote, seriesByOverview, concepts } =
+const { notesById, revisionsByNote, reviewDatesByNote, publicQuestions, graph, vocab, topicsByNote, seriesByOverview, concepts, experiments } =
   await getGardenView(lang);
 const note = notesById.get(Astro.params.slug!)!;
 // English pages show the English edition; the Chinese text appears there only
@@ -70,6 +72,12 @@ const revisions = [...(revisionsByNote.get(note.id) ?? [])].reverse();
 const reviewDates = reviewDatesByNote.get(note.id) ?? [];
 const questions = publicQuestions.filter((q) => q.data.note === note.id);
 const fmt = (d: string) => formatDisplayDate(d, locale);
+
+// Learning experiments: public ones defined here (cards under the body), or —
+// on an experiment's project article — the experiment and the note it came from.
+const handsOn = noteExperiments(experiments, note.id).map((e) => localizeExperiment(e, lang));
+const documented = experiments.byProject.get(note.id);
+const documentedSource = documented ? notesById.get(documented.noteId) : undefined;
 ---
 
 <BaseLayout lang={lang} title={note.data.title} description={note.data.description}>
@@ -144,6 +152,41 @@ const fmt = (d: string) => formatDisplayDate(d, locale);
           )}
           <div class="prose">
             <Content />
+          </div>
+        </section>
+      )
+    }
+
+    {
+      documented && documentedSource && (
+        <section class="mt-12" aria-labelledby="related-knowledge-heading" lang={htmlLang[lang]} data-related-knowledge>
+          <h2 id="related-knowledge-heading" class="section-title">
+            {t('experiments.relatedKnowledge')}
+          </h2>
+          <p class="mt-2 text-sm text-muted">{t('experiments.relatedIntro')}</p>
+          <p class="mt-3">
+            <a class="font-semibold hover:text-accent" href={localePath(lang, `/notes/${documentedSource.id}/`)}>
+              {documentedSource.data.title}
+            </a>
+          </p>
+          <p class="mt-0.5 text-sm text-muted">{documentedSource.data.description}</p>
+          <div class="mt-4">
+            <ExperimentCard lang={lang} experiment={localizeExperiment(documented, lang)} showWriteup={false} />
+          </div>
+        </section>
+      )
+    }
+
+    {
+      handsOn.length > 0 && (
+        <section class="mt-12" aria-labelledby="hands-on-heading" lang={htmlLang[lang]} data-hands-on>
+          <h2 id="hands-on-heading" class="section-title">
+            {t('experiments.handsOn')}
+          </h2>
+          <div class="mt-4 grid gap-4">
+            {handsOn.map((exp) => (
+              <ExperimentCard lang={lang} experiment={exp} />
+            ))}
           </div>
         </section>
       )

@@ -1,0 +1,77 @@
+---
+/**
+ * Projects → More Experiments: completed, public experiments that have a
+ * result (links or a project article). One static page per category filter
+ * (/projects/experiments/ and /projects/experiments/<category>/), so the
+ * filter works without JavaScript and every filtered view has a URL.
+ */
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import ExperimentCard from '../../../../components/ExperimentCard.astro';
+import { LANGS, useTranslations, type Lang, type UiKey } from '../../../../i18n/ui.ts';
+import { localePath } from '../../../../i18n/paths.ts';
+import { getGardenView } from '../../../../lib/garden.ts';
+import {
+  EXPERIMENT_CATEGORIES,
+  localizeExperiment,
+  showcasedExperiments,
+  type ExperimentCategory,
+} from '../../../../lib/experiments.ts';
+
+export function getStaticPaths() {
+  const filters: (ExperimentCategory | undefined)[] = [undefined, ...EXPERIMENT_CATEGORIES];
+  return LANGS.flatMap((lang) => filters.map((category) => ({ params: { lang, category } })));
+}
+
+const lang = Astro.params.lang as Lang;
+const category = Astro.params.category as ExperimentCategory | undefined;
+const t = useTranslations(lang);
+const { experiments, notesById } = await getGardenView(lang);
+const all = showcasedExperiments(experiments);
+const shown = showcasedExperiments(experiments, category);
+const countOf = (c: ExperimentCategory) => all.filter((e) => e.category === c).length;
+const label = (c: ExperimentCategory) => t(`experiments.category.${c}` as UiKey);
+const title = category ? `${t('experiments.title')} · ${label(category)}` : t('experiments.title');
+---
+
+<BaseLayout lang={lang} title={title}>
+  <a href={localePath(lang, '/projects/')} class="text-sm text-muted hover:text-accent">{t('experiments.back')}</a>
+  <h1 class="mt-6 text-2xl sm:text-3xl font-semibold tracking-tight">{t('experiments.title')}</h1>
+  <p class="mt-2 text-muted">{t('experiments.intro')}</p>
+
+  <nav class="mt-6 flex flex-wrap items-center gap-2" aria-label={t('experiments.filter')} data-experiment-filter>
+    <a class="chip" href={localePath(lang, '/projects/experiments/')} aria-current={category ? undefined : 'page'}>
+      {t('experiments.all')} <span aria-hidden="true">·</span> {all.length}
+    </a>
+    {
+      EXPERIMENT_CATEGORIES.map((c) => (
+        <a class="chip" href={localePath(lang, `/projects/experiments/${c}/`)} aria-current={c === category ? 'page' : undefined} data-category={c}>
+          {label(c)} <span aria-hidden="true">·</span> {countOf(c)}
+        </a>
+      ))
+    }
+  </nav>
+
+  <div class="mt-6">
+    {
+      shown.length ? (
+        <ul class="grid gap-4" data-experiment-list>
+          {shown.map((exp) => {
+            const source = notesById.get(exp.noteId);
+            return (
+              <li class="min-w-0">
+                <ExperimentCard
+                  lang={lang}
+                  experiment={localizeExperiment(exp, lang)}
+                  source={source ? { id: source.id, title: source.data.title } : undefined}
+                  compact
+                />
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p class="text-muted">{t('experiments.empty')}</p>
+      )
+    }
+  </div>
+</BaseLayout>

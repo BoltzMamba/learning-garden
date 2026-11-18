@@ -58,3 +58,15 @@ Entry shape: `"<id>": { "zh": { "term", "aliases"?, "definition" }, "en": { … 
 7. Done when `npm run concepts:check` exits 0 and every reference id and source anchor is the same in both languages.
 
 Moving a definition: move the `:dfn[…]{#anchor}` with it and keep the anchor id. To re-source a concept, add the anchor in the new note (both languages) and update `source`. A manual English edition belongs to the author: report missing anchors or references in it and leave the file unchanged.
+
+## Learning Experiments
+
+An experiment is a small, optional hands-on task (about 30 minutes to 2 hours) registered in a knowledge note's Chinese frontmatter under `experiments`. Its purpose is to test the note's understanding. The field reference, examples and display rules are in `README.md` → "Learning experiments". The schema and cross-checks are in `src/lib/experiments.ts`.
+
+### Steps
+
+1. **Propose.** When the owner asks, read the note and the notes it links to. If an experiment would not clearly deepen understanding, say so and stop. Otherwise propose 2–3 candidates. For each, give: name, the core concept it tests, goal, rough effort, core requirements, acceptance criteria, likely sticking points, and why it builds understanding. Keep each one scoped to the note's concept (an agent-loop note gets a minimal loop, not a multi-agent platform). Give no reference code at this stage.
+2. **Wait for the owner's choice.** The owner picks a candidate and may edit its goal, scope and acceptance criteria. Write nothing to any file until they confirm.
+3. **Register.** Add the confirmed experiment to the Chinese note with `status: planned`, `public` as the owner says, and the `zh` and `en` text for the title, description and requirements. This changes the note's translation source hash, so then follow "Translating notes": for an auto edition, copy its current title, description and body into `.translations/<id>.md` and run `apply`; for a manual one, report a manual one as `MANUAL_STALE`. Done when `npm run translate:check -- --strict` and `npm run build` pass.
+4. **Coach in levels.** While the owner builds it, give the lowest level that unblocks them, and escalate only when asked: (1) hints about the approach, (2) pseudocode or key logic, (3) a reference implementation. Code review and help with tests are always fine.
+5. **Complete.** Update `status`, add the `links` the owner gives you, and create a project article (`projectTier: experiment`, `experimentId`, `sourceNote`) only when the owner asks for one. The article stays an unpublished draft until the experiment is `completed`; at that point, set its `published` date and make sure its English edition is current. Record only results the owner actually produced. Done when the build passes and the experiment shows under Projects → More Experiments.

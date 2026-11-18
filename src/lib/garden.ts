@@ -26,6 +26,7 @@ import { localizeNotes, localizeSeries, titleLabels, type ContentLang, type Loca
 import { formatScan, scanTranslations, type TranslationScan } from './translation-check.ts';
 import { checkConcepts } from './concepts-check.ts';
 import type { Concept } from './concepts.ts';
+import { unpublishedProjectIds, validateExperiments, type ExperimentIndex } from './experiments.ts';
 
 /** A note's Chinese source entry: the structure of every logical note. */
 export type SourceNote = CollectionEntry<'notes'>;
@@ -64,6 +65,8 @@ interface GardenData {
   vocab: Vocabulary;
   /** Note id → resolved topic ids. */
   topicsByNote: Map<string, string[]>;
+  /** Learning experiments (from notes' frontmatter), validated and linked to project articles. */
+  experiments: ExperimentIndex;
 }
 
 /**
@@ -82,9 +85,13 @@ function loadGithubActivity(): GithubActivity | undefined {
 let cache: Promise<GardenData> | undefined;
 
 async function load(): Promise<GardenData> {
-  const notes = (await getCollection('notes')).sort(
+  const allNotes = (await getCollection('notes')).sort(
     (a, b) => b.data.published.localeCompare(a.data.published) || a.data.title.localeCompare(b.data.title),
   );
+  // Experiment write-ups stay unpublished drafts until their experiment is
+  // completed: validated below, but no page, list entry, graph node or event.
+  const drafts = unpublishedProjectIds(allNotes);
+  const notes = allNotes.filter((n) => !drafts.has(n.id));
   const editions = new Map((await getCollection('notesEn')).map((e) => [e.id, e]));
 
   // Bilingual state, with the same rules as `npm run translate:check`.
@@ -153,7 +160,7 @@ async function load(): Promise<GardenData> {
   // Cross-entry checks: series, related and tags. Bad references fail the build.
   const vocab = parseVocabulary(topicsJson);
   const check = validateContent(
-    notes.map((n) => ({
+    allNotes.map((n) => ({
       id: n.id,
       file: n.filePath ?? `src/content/notes/${n.id}.md`,
       title: n.data.title,
@@ -168,6 +175,34 @@ async function load(): Promise<GardenData> {
   );
   for (const w of check.warnings) console.warn(`[content] ${w}`);
   if (check.errors.length) throw new Error(['Invalid note metadata:', ...check.errors].join('\n  '));
+
+  // Learning experiments: global ids, project article ↔ experiment ↔ source note.
+  const experiments = validateExperiments(
+    allNotes.map((n) => ({
+      id: n.id,
+      file: n.filePath ?? `src/content/notes/${n.id}.md`,
+      section: n.data.category,
+      experiments: n.data.experiments,
+      projectTier: n.data.projectTier,
+      experimentId: n.data.experimentId,
+      sourceNote: n.data.sourceNote,
+    })),
+  );
+  for (const w of experiments.warnings) console.warn(`[experiments] ${w}`);
+  if (experiments.errors.length) throw new Error(['Invalid learning experiments:', ...experiments.errors].join('\n  '));
+  // A published page must not point at a draft (it has no page yet).
+  const draftRefs = [
+    ...notes.flatMap((n) =>
+      [...n.data.related, ...(n.data.series ? [n.data.series] : [])]
+        .filter((id) => drafts.has(id))
+        .map((id) => `src/content/notes/${n.id}.md: "${id}" is an unpublished experiment write-up (its experiment is not completed yet)`),
+    ),
+    ...questions
+      .filter((q) => q.data.note && drafts.has(q.data.note))
+      .map((q) => `src/content/questions/${q.id}.md: note "${q.data.note}" is an unpublished experiment write-up`),
+  ];
+  if (draftRefs.length) throw new Error(['References to unpublished drafts:', ...draftRefs].join('\n  '));
+  for (const id of drafts) console.log(`[experiments] ${id}: unpublished draft until its experiment is completed`);
 
   // Series membership and order come from the Chinese source; each language
   // view maps the same ids to its own titles.
@@ -219,6 +254,7 @@ async function load(): Promise<GardenData> {
     graph,
     vocab,
     topicsByNote: check.topics,
+    experiments,
   };
 }
 

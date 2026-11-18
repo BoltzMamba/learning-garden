@@ -1,9 +1,15 @@
 ---
-/** Projects: its own entry point, but the same notes, tags, relations and graph. */
+/**
+ * Projects: featured projects first; learning experiments get one quiet entry
+ * point (More Experiments) so they never crowd out the core work. Project
+ * articles without `projectTier` are featured.
+ */
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import NoteList from '../../../components/NoteList.astro';
 import { LANGS, useTranslations, type Lang } from '../../../i18n/ui.ts';
+import { localePath } from '../../../i18n/paths.ts';
 import { getGardenView } from '../../../lib/garden.ts';
+import { projectTierOf, showcasedExperiments } from '../../../lib/experiments.ts';
 
 export function getStaticPaths() {
   return LANGS.map((lang) => ({ params: { lang } }));
@@ -11,14 +17,28 @@ export function getStaticPaths() {
 
 const lang = Astro.params.lang as Lang;
 const t = useTranslations(lang);
-const { notes } = await getGardenView(lang);
-const projects = notes.filter((n) => n.data.category === 'projects');
+const { notes, experiments } = await getGardenView(lang);
+const featured = notes.filter((n) => n.data.category === 'projects' && projectTierOf(n.data) === 'featured');
+const completed = showcasedExperiments(experiments).length;
 ---
 
 <BaseLayout lang={lang} title={t('projects.title')}>
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">{t('projects.title')}</h1>
   <p class="mt-2 text-muted">{t('projects.intro')}</p>
-  <div class="mt-6">
-    {projects.length ? <NoteList lang={lang} notes={projects} /> : <p class="text-muted">{t('projects.empty')}</p>}
-  </div>
+
+  <section class="mt-8" aria-labelledby="featured-heading" data-featured-projects>
+    <h2 id="featured-heading" class="section-title">{t('projects.featured')}</h2>
+    <div class="mt-3">
+      {featured.length ? <NoteList lang={lang} notes={featured} /> : <p class="text-muted">{t('projects.empty')}</p>}
+    </div>
+  </section>
+
+  <section class="mt-12" aria-labelledby="more-experiments-heading" data-more-experiments>
+    <h2 id="more-experiments-heading" class="section-title">{t('projects.more')}</h2>
+    <p class="mt-2 text-sm text-muted">{t('projects.moreIntro')}</p>
+    <p class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
+      <span class="font-mono text-xs text-muted" data-experiment-count={completed}>{t('projects.moreCount', { n: completed })}</span>
+      <a class="link" href={localePath(lang, '/projects/experiments/')}>{t('projects.moreOpen')}</a>
+    </p>
+  </section>
 </BaseLayout>

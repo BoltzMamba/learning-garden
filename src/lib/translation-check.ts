@@ -14,6 +14,7 @@ import {
   type NoteTranslationReport,
   type TranslationStatus,
 } from './translation.ts';
+import { unpublishedProjectIds } from './experiments.ts';
 
 export const ZH_DIR = 'src/content/notes';
 export const EN_DIR = 'src/content/notes-en';
@@ -25,6 +26,8 @@ export interface TranslationScan {
   failures: NoteTranslationReport[];
   /** MANUAL_STALE reports: shown, never blocking. */
   manualStale: NoteTranslationReport[];
+  /** Unpublished experiment write-ups: reported, never blocking until their experiment is completed. */
+  drafts?: string[];
 }
 
 function markdownFiles(dir: string): Map<string, string> {
@@ -36,13 +39,17 @@ function markdownFiles(dir: string): Map<string, string> {
   return files;
 }
 
-function titleOf(text: string): string | undefined {
+function frontmatterOf(text: string): Record<string, unknown> {
   try {
-    const t = parseMarkdownFile(text).frontmatter.title;
-    return typeof t === 'string' ? t : undefined;
+    return parseMarkdownFile(text).frontmatter;
   } catch {
-    return undefined;
+    return {};
   }
+}
+
+function titleOf(text: string): string | undefined {
+  const t = frontmatterOf(text).title;
+  return typeof t === 'string' ? t : undefined;
 }
 
 export function scanTranslations(root: string, options: { only?: string } = {}): TranslationScan {
@@ -62,13 +69,16 @@ export function scanTranslations(root: string, options: { only?: string } = {}):
     .filter((id) => options.only === undefined || id === options.only)
     .map((id) => classifyTranslation({ id, zhText: zh.get(id), enText: en.get(id), refs }));
 
+  // Same rule as the build: experiment write-ups are drafts until the experiment is completed.
+  const drafts = unpublishedProjectIds([...zh].map(([id, text]) => ({ id, data: frontmatterOf(text) })));
   const counts = Object.fromEntries(TRANSLATION_STATUSES.map((s) => [s, 0])) as Record<TranslationStatus, number>;
   for (const n of notes) counts[n.status]++;
   return {
     notes,
     counts,
-    failures: notes.filter((n) => STRICT_FAILURES.has(n.status)),
-    manualStale: notes.filter((n) => n.status === 'MANUAL_STALE'),
+    failures: notes.filter((n) => STRICT_FAILURES.has(n.status) && !drafts.has(n.id)),
+    manualStale: notes.filter((n) => n.status === 'MANUAL_STALE' && !drafts.has(n.id)),
+    drafts: notes.filter((n) => drafts.has(n.id)).map((n) => n.id),
   };
 }
 
@@ -76,8 +86,9 @@ export function scanTranslations(root: string, options: { only?: string } = {}):
 export function formatScan(scan: TranslationScan, { verbose = true } = {}): string[] {
   const lines: string[] = [];
   for (const n of scan.notes) {
-    const mark = STRICT_FAILURES.has(n.status) ? '✗' : n.status === 'MANUAL_STALE' ? '!' : '✓';
-    lines.push(`${mark} ${n.status.padEnd(14)} ${n.id}`);
+    const draft = scan.drafts?.includes(n.id);
+    const mark = draft ? '·' : STRICT_FAILURES.has(n.status) ? '✗' : n.status === 'MANUAL_STALE' ? '!' : '✓';
+    lines.push(`${mark} ${n.status.padEnd(14)} ${n.id}${draft ? '  (unpublished draft: not required until its experiment is completed)' : ''}`);
     for (const r of n.reasons) lines.push(`    - ${r}`);
     if (verbose) for (const w of n.warnings) lines.push(`    ~ ${w}`);
   }

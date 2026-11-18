@@ -118,7 +118,7 @@ describe('translation status', () => {
     const edited = zhFile('智能体循环', '智能体如何执行。', `${ZH_BODY}\n\n新增一段。`);
     const r = classify(en, edited);
     assert.equal(r.status, 'AUTO_STALE');
-    assert.match(r.reasons.join(' '), /Chinese title, description or body changed/);
+    assert.match(r.reasons.join(' '), /Chinese title, description, body or experiment text changed/);
   });
 
   test('structural frontmatter changes (series, related, order, tags) do not make a translation stale', () => {

@@ -1,0 +1,94 @@
+---
+/**
+ * One learning experiment, in the page language only. Static: the extra
+ * requirements fold into a native <details>, so no client JavaScript.
+ * Status is spelled out in text (the glyph is decoration), never colour alone.
+ */
+import { localePath } from '../i18n/paths.ts';
+import { useTranslations, type Lang, type UiKey } from '../i18n/ui.ts';
+import type { LocalExperiment } from '../lib/experiments.ts';
+
+interface Props {
+  lang: Lang;
+  experiment: LocalExperiment;
+  /** The note that defines the experiment, when the card is shown away from it. */
+  source?: { id: string; title: string };
+  /** Link to the project article (omit on the article itself). */
+  showWriteup?: boolean;
+  /** Compact list item: no requirements. */
+  compact?: boolean;
+  headingLevel?: 'h3' | 'h4';
+}
+const { lang, experiment: exp, source, showWriteup = true, compact = false, headingLevel: Heading = 'h3' } = Astro.props;
+const t = useTranslations(lang);
+const GLYPH = { planned: '○', 'in-progress': '◐', completed: '●' } as const;
+const statusLabel = t(`experiments.status.${exp.status}` as UiKey);
+const categoryLabel = t(`experiments.category.${exp.category}` as UiKey);
+const writeup = showWriteup && exp.projectId ? localePath(lang, `/notes/${exp.projectId}/`) : undefined;
+const reqId = `exp-${exp.id}-requirements`;
+---
+
+<article class="card p-4 sm:p-5 min-w-0" data-experiment={exp.id} data-status={exp.status} data-category={exp.category}>
+  <div class="flex flex-wrap items-center gap-1.5">
+    <span class="chip text-fg" data-experiment-status>
+      <span aria-hidden="true">{GLYPH[exp.status]}</span>
+      <span class="sr-only">{t('experiments.status')}:</span>
+      {statusLabel}
+    </span>
+    <span class="chip">{categoryLabel}</span>
+  </div>
+  <Heading class="mt-3 font-semibold leading-snug break-words">{exp.title}</Heading>
+  <p class="mt-1 text-sm text-muted break-words">{exp.description}</p>
+
+  {
+    !compact && exp.requirements.length > 0 && (
+      <div class="mt-4">
+        <p id={reqId} class="text-xs font-mono text-muted">
+          {t('experiments.requirements')}
+        </p>
+        <ul class="mt-1.5 space-y-1 text-sm list-disc pl-5 marker:text-muted" aria-labelledby={reqId}>
+          {exp.requirements.map((r) => (
+            <li class="break-words">{r}</li>
+          ))}
+        </ul>
+        {exp.moreRequirements.length > 0 && (
+          <details class="mt-1.5 text-sm">
+            <summary class="cursor-pointer text-muted hover:text-accent">
+              {t('experiments.moreRequirements', { n: exp.moreRequirements.length })}
+            </summary>
+            <ul class="mt-1 space-y-1 list-disc pl-5 marker:text-muted">
+              {exp.moreRequirements.map((r) => (
+                <li class="break-words">{r}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    )
+  }
+
+  {
+    (writeup || exp.links.length > 0 || source) && (
+      <p class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        {writeup && (
+          <a class="link" href={writeup} data-experiment-writeup>
+            {t('experiments.writeup')}
+          </a>
+        )}
+        {exp.links.map((l) => (
+          <a class="link [overflow-wrap:anywhere]" href={l.url} rel="noopener noreferrer" data-experiment-link={l.kind}>
+            {l.label ?? t(`experiments.link.${l.kind}` as UiKey)} ↗
+          </a>
+        ))}
+        {source && (
+          <span class="text-muted">
+            {t('experiments.sourceNote')}:{' '}
+            <a class="link" href={localePath(lang, `/notes/${source.id}/`)} data-experiment-source>
+              {source.title}
+            </a>
+          </span>
+        )}
+      </p>
+    )
+  }
+</article>
