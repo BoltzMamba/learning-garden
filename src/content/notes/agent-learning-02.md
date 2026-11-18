@@ -79,7 +79,7 @@ flowchart LR
 
 #### b. Workflow
 
-:ink[**Prompt Chaining（提示词链）:** 将复杂任务拆分成顺序执行的多个 LLM 调用。]{color="gray"}
+==**Prompt Chaining（提示词链）:** 将复杂任务拆分成顺序执行的多个 LLM 调用。==
 
 ```mermaid
 flowchart LR
@@ -96,7 +96,7 @@ flowchart LR
 
 - **Gate（检查节点）:** 可以在步骤之间加入程序化检查，例如生成 JSON 后，先检查它是否符合 Schema。如果不符合，直接中止或者要求重新生成，不需要把错误结果继续传递到后面的步骤。
 
-:ink[**Routing（路由）:** 先判断任务属于哪种类型，再分配到相应的处理流程。]{color="gray"}
+==**Routing（路由）:** 先判断任务属于哪种类型，再分配到相应的处理流程。==
 
 ```mermaid
 flowchart LR
@@ -114,7 +114,7 @@ flowchart LR
 
 - **Routing 与 Agent Planning 的区别:** Routing 通常是在预定义分支中进行选择。Agent Planning 则可以动态决定后续需要执行什么，甚至组合多个工具形成新的执行路径。Routing 不一定意味着 Agent 自主规划。
 
-:ink[**Parallelization（并行化）:** 将任务拆分成多个可以同时执行的 LLM 调用，再汇总结果。]{color="gray"}
+==**Parallelization（并行化）:** 将任务拆分成多个可以同时执行的 LLM 调用，再汇总结果。==
 
 - **(i) Sectioning（任务分割）:** 将任务拆分为不同子任务，每个模型调用负责一个部分。各个任务可以独立运行，最后合并结果。
 
@@ -144,7 +144,7 @@ flowchart LR
     - Sectioning 关注的是把不同工作并行完成。
     - Voting 关注的是通过多次独立尝试，提高结果的覆盖率或可信度。
 
-:ink[**※ Orchestrator-Workers（协调者—工作者模式）: 用一个中心 LLM 作为协调者，动态:concept[分解任务]{id="task-decomposition"}，并将子任务分配给多个 Worker。**]{color="gray"}
+**==※ Orchestrator-Workers（协调者—工作者模式）: 用一个中心 LLM 作为协调者，动态:concept[分解任务]{id="task-decomposition"}，并将子任务分配给多个 Worker。==**
 
 ```mermaid
 flowchart LR
@@ -172,7 +172,7 @@ flowchart LR
 
 - **适用场景:** 适合复杂任务具有动态子任务、但子任务又可以独立委托的情况。
 
-:ink[**Evaluator-Optimizer（评估者—优化者模式）:** 使用一个 LLM 生成结果，另一个 LLM 进行评价，并通过反馈循环持续改进。]{color="gray"}
+==**Evaluator-Optimizer（评估者—优化者模式）:** 使用一个 LLM 生成结果，另一个 LLM 进行评价，并通过反馈循环持续改进。==
 
 ```mermaid
 flowchart LR

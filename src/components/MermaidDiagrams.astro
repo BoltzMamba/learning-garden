@@ -7,6 +7,12 @@
  * pages that contain such a block, and diagrams are redrawn when the reader
  * switches between light and dark themes. If rendering fails, the code block
  * stays as it is, so the source is never lost.
+ *
+ * Mermaid sizes each node by measuring its label in a scratch element. That
+ * element is placed inside the diagram's own <figure>, so the measurement sees
+ * the same CSS as the finished diagram; measured under <body> instead, the
+ * labels inherit .prose's larger line-height after insertion and overflow
+ * (wrapped lines get clipped). Fonts are awaited for the same reason.
  */
 ---
 
@@ -24,14 +30,24 @@
       return figure;
     });
 
+    await document.fonts?.ready;
+    const fontFamily = getComputedStyle(document.body).fontFamily;
+
     let run = 0;
     const render = async () => {
       const current = ++run;
       const dark = document.documentElement.dataset.theme === 'dark';
-      mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'default', securityLevel: 'strict' });
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: dark ? 'dark' : 'default',
+        securityLevel: 'strict',
+        fontFamily,
+        flowchart: { wrappingWidth: 180 },
+      });
       for (const [i, pre] of blocks.entries()) {
         try {
-          const { svg } = await mermaid.render(`mermaid-${i}-${current}`, sources[i]);
+          figures[i].hidden = false; // must be laid out for Mermaid to measure inside it
+          const { svg } = await mermaid.render(`mermaid-${i}-${current}`, sources[i], figures[i]);
           if (current !== run) return; // a newer theme switch took over
           figures[i].innerHTML = svg;
           figures[i].hidden = false;
@@ -57,6 +73,9 @@
     margin: 1.5em 0;
     overflow-x: auto;
     text-align: center;
+    /* Label typography Mermaid measures with; .prose's 1.8 / anywhere would overflow the boxes. */
+    line-height: 1.5;
+    overflow-wrap: normal;
   }
   .prose figure.mermaid-diagram svg {
     max-width: 100%;

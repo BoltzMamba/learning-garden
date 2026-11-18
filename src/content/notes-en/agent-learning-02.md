@@ -3,8 +3,8 @@ title: "Agent Learning Notes 02: Agent Architecture Design (From Workflows to Au
 description: "Notes on Anthropic's Building Effective Agents: the difference between workflows and agents, the common architectural patterns, and the principles for choosing between them."
 translation:
   mode: auto
-  sourceHash: "sha256:5ba555a0fb0f8704a87add297fe96fa18881ba217dce3a5cb81ad0265fca0e6c"
-  generatedHash: "sha256:94fa1ec705f4e361765421e718ea1fded67737b8d8f508e2bcc40c96dd513739"
+  sourceHash: "sha256:b846a0b10d53ad588aced140dc308bb08738d8569003dbdcb49f56d3f915042d"
+  generatedHash: "sha256:3f6f9120c917a2254c04e52cff39a8e3f6f10de2f86b9b1f95f27d91e38dab30"
   rulesVersion: 1
 ---
 
@@ -78,7 +78,7 @@ flowchart LR
 
 #### b. Workflow
 
-:ink[**Prompt Chaining:** Split a complex task into several LLM calls executed in sequence.]{color="gray"}
+==**Prompt Chaining:** Split a complex task into several LLM calls executed in sequence.==
 
 ```mermaid
 flowchart LR
@@ -95,7 +95,7 @@ flowchart LR
 
 - **Gate:** You can add programmatic checks between steps. For example, after generating JSON, first check that it matches the schema. If it does not, stop right away or ask for regeneration, instead of passing the bad result on to later steps.
 
-:ink[**Routing:** First decide what type of task this is, then send it to the matching handling flow.]{color="gray"}
+==**Routing:** First decide what type of task this is, then send it to the matching handling flow.==
 
 ```mermaid
 flowchart LR
@@ -113,7 +113,7 @@ flowchart LR
 
 - **Routing vs. agent planning:** Routing usually chooses among predefined branches. Agent planning can decide dynamically what to do next, even combining several tools into a new execution path. Routing does not necessarily mean the agent is planning on its own.
 
-:ink[**Parallelization:** Split the task into several LLM calls that can run at the same time, then aggregate the results.]{color="gray"}
+==**Parallelization:** Split the task into several LLM calls that can run at the same time, then aggregate the results.==
 
 - **(i) Sectioning:** Split the task into different subtasks, each handled by one model call. The subtasks run independently, and the results are merged at the end.
 
@@ -143,7 +143,7 @@ flowchart LR
     - Sectioning is about getting different pieces of work done in parallel.
     - Voting is about improving the coverage or credibility of the result through several independent attempts.
 
-:ink[**※ Orchestrator-Workers: A central LLM acts as the orchestrator, dynamically :concept[breaks down the task]{id="task-decomposition"}, and assigns the subtasks to several workers.**]{color="gray"}
+**==※ Orchestrator-Workers: A central LLM acts as the orchestrator, dynamically :concept[breaks down the task]{id="task-decomposition"}, and assigns the subtasks to several workers.==**
 
 ```mermaid
 flowchart LR
@@ -171,7 +171,7 @@ flowchart LR
 
 - **When to use it:** Complex tasks whose subtasks are dynamic but can still be delegated independently.
 
-:ink[**Evaluator-Optimizer:** One LLM generates a result, another LLM evaluates it, and a feedback loop keeps improving it.]{color="gray"}
+==**Evaluator-Optimizer:** One LLM generates a result, another LLM evaluates it, and a feedback loop keeps improving it.==
 
 ```mermaid
 flowchart LR
