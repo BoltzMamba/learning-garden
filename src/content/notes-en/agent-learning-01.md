@@ -3,7 +3,7 @@ title: "Agent Learning Notes 01: What Is an Agent"
 description: "A first systematic look at what an agent is, what it is made of, and its basic loop."
 translation:
   mode: auto
-  sourceHash: "sha256:9eaac12b00c97efe0a8f325aaa27fbe57dd3f9d57aec69bb3fce16a6c2e4e123"
+  sourceHash: "sha256:1316986e84cbedb6aa398040b22d026f6dd851f4f67dd4a991047ecab0f12c10"
   generatedHash: "sha256:00c4666109ea7c1c590c4d91597ae1fdddc829c654972fc7dd079ee53285430a"
   rulesVersion: 1
 ---

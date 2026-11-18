@@ -6,6 +6,20 @@ tags: ["ai-agent","large-language-models"]
 published: "2026-11-17"
 series: "ai-agent-learning"
 order: 10
+experiments:
+  - id: weather-trip-agent
+    category: agent-learning
+    status: in-progress
+    public: true
+    title: { zh: "天气出游小助手：最小工具调用 Agent", en: "Weather Trip Helper: A Minimal Tool-Calling Agent" }
+    description: { zh: "让 LLM 自己调用天气工具查询明天的天气，再推荐去哪里玩，体会“调用工具 → 读取结果 → 继续执行”的基本循环。", en: "Let the LLM call a weather tool to check tomorrow's weather and then recommend where to go, to experience the basic loop of calling a tool, reading the result and continuing." }
+    requirements:
+      - { zh: "定义工具 get_weather(city)，返回明天的模拟天气（天气状况和温度）", en: "Define a get_weather(city) tool that returns tomorrow's simulated weather (conditions and temperature)" }
+      - { zh: "天气由 LLM 通过工具调用获取，而不是提前写进提示词", en: "The LLM obtains the weather through a tool call instead of having it written into the prompt" }
+      - { zh: "实现最小循环：LLM 请求调用工具 → 程序执行工具 → 结果返回给 LLM → LLM 给出推荐", en: "Implement the minimal loop: the LLM requests a tool call, the program runs the tool, the result goes back to the LLM, and the LLM gives a recommendation" }
+      - { zh: "根据天气推荐一个去处并说明理由（例如下雨去博物馆，晴天去公园）", en: "Recommend a place based on the weather and explain why (for example, a museum when it rains and a park when it is sunny)" }
+      - { zh: "设置终止条件：给出最终回答，或超过最大步数（例如 5 步）就停止", en: "Define the termination conditions: stop on a final answer or after a maximum number of steps (for example, 5)" }
+      - { zh: "工具出错时（例如城市不存在），Agent 告诉用户出了什么问题，而不是直接崩溃", en: "When the tool fails (for example, for an unknown city), the agent tells the user what went wrong instead of crashing" }
 ---
 
 ## AI Agent
