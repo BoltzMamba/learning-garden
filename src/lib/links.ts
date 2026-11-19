@@ -35,7 +35,8 @@ export function makeResolver(notes: readonly NoteRef[]): Resolver {
 /** Remove fenced code blocks and inline code so example links inside them are ignored. */
 export function stripCode(markdown: string): string {
   return markdown
-    .replace(/^(\s*)(```|~~~)[^\n]*\n[\s\S]*?^\1\2[^\n]*$/gm, '')
+    // Indent is [ \t]*, not \s*: under /m, \s* would swallow blank lines and pair the wrong fences.
+    .replace(/^([ \t]*)(```|~~~)[^\n]*\n[\s\S]*?^\1\2[^\n]*$/gm, '')
     .replace(/`[^`\n]*`/g, '');
 }
 

@@ -19,6 +19,9 @@
 <script>
   const blocks = [...document.querySelectorAll<HTMLPreElement>('.prose pre[data-language="mermaid"]')];
 
+  /** Smallest scale a diagram may shrink to (Mermaid's 16px labels → 12px). */
+  const MIN_SCALE = 0.75;
+
   if (blocks.length > 0) {
     const { default: mermaid } = await import('mermaid');
     const sources = blocks.map((pre) => pre.textContent ?? '');
@@ -50,6 +53,10 @@
           const { svg } = await mermaid.render(`mermaid-${i}-${current}`, sources[i], figures[i]);
           if (current !== run) return; // a newer theme switch took over
           figures[i].innerHTML = svg;
+          // Shrink with the column, but never below MIN_SCALE of natural size; narrower than that, the figure scrolls.
+          const drawn = figures[i].querySelector('svg');
+          const naturalWidth = drawn?.viewBox.baseVal?.width;
+          if (drawn && naturalWidth) drawn.style.minWidth = `${Math.round(naturalWidth * MIN_SCALE)}px`;
           figures[i].hidden = false;
           pre.hidden = true;
         } catch (error) {
@@ -72,6 +79,8 @@
   .prose figure.mermaid-diagram {
     margin: 1.5em 0;
     overflow-x: auto;
+    /* The svg's min-width must scroll inside the figure, not widen the article column. */
+    contain: inline-size;
     text-align: center;
     /* Label typography Mermaid measures with; .prose's 1.8 / anywhere would overflow the boxes. */
     line-height: 1.5;

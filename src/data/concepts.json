@@ -139,5 +139,77 @@
       "note": "agent-learning-01",
       "anchor": "tool-use"
     }
+  },
+  "agentic-workflow": {
+    "zh": {
+      "term": "Workflow",
+      "aliases": [
+        "工作流"
+      ],
+      "definition": "LLM 和工具按预先设计的代码路径执行任务，执行步骤由开发者而非模型决定。"
+    },
+    "en": {
+      "term": "workflow",
+      "definition": "A system where the LLM and tools follow predefined code paths, so the developer, not the model, decides the steps."
+    },
+    "source": {
+      "note": "agent-learning-02",
+      "anchor": "agentic-workflow"
+    }
+  },
+  "augmented-llm": {
+    "zh": {
+      "term": "增强型 LLM",
+      "aliases": [
+        "Augmented LLM"
+      ],
+      "definition": "以 LLM 为核心、能使用检索、工具、记忆等外部能力的基础构建单元，是 Workflow 和 Agent 的共同基础。"
+    },
+    "en": {
+      "term": "augmented LLM",
+      "definition": "The basic building block of workflows and agents: an LLM that can use external capabilities such as retrieval, tools and memory."
+    },
+    "source": {
+      "note": "agent-learning-02",
+      "anchor": "augmented-llm"
+    }
+  },
+  "mcp": {
+    "zh": {
+      "term": "MCP（模型上下文协议）",
+      "aliases": [
+        "MCP",
+        "Model Context Protocol"
+      ],
+      "definition": "让 AI 应用与外部系统交换工具、资源等能力的标准化协议，由 Host、Client、Server 三个角色组成。"
+    },
+    "en": {
+      "term": "Model Context Protocol",
+      "aliases": [
+        "MCP"
+      ],
+      "definition": "A standard protocol that lets AI applications exchange tools, resources and other capabilities with external systems, built around hosts, clients and servers."
+    },
+    "source": {
+      "note": "agent-learning-02",
+      "anchor": "mcp"
+    }
+  },
+  "orchestrator-workers": {
+    "zh": {
+      "term": "协调者—工作者模式",
+      "aliases": [
+        "Orchestrator-Workers"
+      ],
+      "definition": "由中心 LLM 根据输入动态分解任务、分配给多个 Worker 并整合结果的架构模式。"
+    },
+    "en": {
+      "term": "orchestrator-workers",
+      "definition": "An architecture pattern where a central LLM dynamically breaks a task down based on the input, delegates the subtasks to workers and combines their results."
+    },
+    "source": {
+      "note": "agent-learning-02",
+      "anchor": "orchestrator-workers"
+    }
   }
 }

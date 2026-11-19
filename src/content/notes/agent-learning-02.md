@@ -11,7 +11,7 @@ related: ["agent-learning-01"]
 
 ## Agentic Systems（智能体式系统）
 
-**Workflow:** LLM 和工具按照预先设计的程序路径执行任务。
+**:dfn[Workflow]{#agentic-workflow}:** LLM 和工具按照预先设计的程序路径执行任务。
 
 **:concept[Agent]{id="ai-agent"}:** 由 LLM 根据任务和环境反馈，动态决定如何使用工具、如何执行下一步。
 
@@ -54,7 +54,7 @@ Agent Framework / SDK 可以封装 LLM 调用、工具执行、多轮对话管�
 
 :ink[**普通 LLM:** 用户输入 -> LLM -> 生成回答]{color="gray"}
 
-**Augmented LLM:** 一个以 LLM 为核心、能够使用额外能力的软件组件，Workflow 和 Agent 都可以使用这个基础构建单元。
+**:dfn[Augmented LLM]{#augmented-llm}:** 一个以 LLM 为核心、能够使用额外能力的软件组件，Workflow 和 Agent 都可以使用这个基础构建单元。
 
 **==Augmented LLM = LLM + 外部增强能力（Retrieval、Tools、Memory 等）==**
 
@@ -71,7 +71,7 @@ flowchart LR
 | Tools | 我需要执行什么外部操作？ | 调用 API、运行代码 | 让 LLM 能够与外部系统交互并执行操作 |
 | Memory | 过去的信息如何保存和复用？ | 保存对话、检索历史偏好 | 保存和复用过去的信息 |
 
-:ink[**MCP（Model Context Protocol）:** 实现 Augmented LLM 的一种可选方式，提供了一套标准化协议，让 AI 应用能够与外部系统交换工具、资源等信息。]{color="gray"}
+:ink[**:dfn[MCP（Model Context Protocol）]{#mcp}:** 实现 Augmented LLM 的一种可选方式，提供了一套标准化协议，让 AI 应用能够与外部系统交换工具、资源等信息。]{color="gray"}
 
 - :ink[**MCP Host:** 发起连接的 AI 应用本身（如桌面 AI 助手、IDE），负责创建和管理一个或多个 MCP Client。]{color="gray"}
 - :ink[**MCP Client:** 由 Host 创建、与某个 MCP Server 保持一对一连接的协议客户端。]{color="gray"}
@@ -144,7 +144,7 @@ flowchart LR
     - Sectioning 关注的是把不同工作并行完成。
     - Voting 关注的是通过多次独立尝试，提高结果的覆盖率或可信度。
 
-**==※ Orchestrator-Workers（协调者—工作者模式）: 用一个中心 LLM 作为协调者，动态:concept[分解任务]{id="task-decomposition"}，并将子任务分配给多个 Worker。==**
+**==※ :dfn[Orchestrator-Workers（协调者—工作者模式）]{#orchestrator-workers}: 用一个中心 LLM 作为协调者，动态:concept[分解任务]{id="task-decomposition"}，并将子任务分配给多个 Worker。==**
 
 ```mermaid
 flowchart LR

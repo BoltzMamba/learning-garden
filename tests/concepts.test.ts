@@ -225,6 +225,12 @@ describe('whole-site concept check', () => {
   test('scanning ignores code and math', () => {
     assert.deepEqual(scanConceptMarkup('`:concept[x]{id="a"}`\n\n```\n:dfn[y]{#b}\n```\n\n:concept[z]{id="c"} :dfn[w]{#d}'), { references: ['c'], anchors: ['d'] });
   });
+
+  test('markup between several code blocks separated by blank lines is still seen', () => {
+    const block = '\n\n```mermaid\nflowchart LR\n```\n\n';
+    const body = `:dfn[a]{#a}${block}:dfn[b]{#b}${block}:concept[c]{id="c"}${block}:dfn[d]{#d}`;
+    assert.deepEqual(scanConceptMarkup(body), { references: ['c'], anchors: ['a', 'b', 'd'] });
+  });
 });
 
 describe('translation and graph boundaries', () => {

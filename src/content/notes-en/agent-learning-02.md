@@ -3,14 +3,14 @@ title: "Agent Learning Notes 02: Agent Architecture Design (From Workflows to Au
 description: "Notes on Anthropic's Building Effective Agents: the difference between workflows and agents, the common architectural patterns, and the principles for choosing between them."
 translation:
   mode: auto
-  sourceHash: "sha256:b846a0b10d53ad588aced140dc308bb08738d8569003dbdcb49f56d3f915042d"
-  generatedHash: "sha256:3f6f9120c917a2254c04e52cff39a8e3f6f10de2f86b9b1f95f27d91e38dab30"
+  sourceHash: "sha256:9c19b2d326400a1ba2adc5e7c429aaca2cfd9aa6bf7d2190099c0726fd706b98"
+  generatedHash: "sha256:6ff91ec98d94cc9b0da2204a4499589c67588adcfea271a0d3fa17d8d72579c9"
   rulesVersion: 1
 ---
 
 ## Agentic Systems
 
-**Workflow:** The LLM and tools carry out the task along predefined code paths.
+**:dfn[Workflow]{#agentic-workflow}:** The LLM and tools carry out the task along predefined code paths.
 
 **:concept[Agent]{id="ai-agent"}:** The LLM dynamically decides how to use tools and what to do next, based on the task and feedback from the environment.
 
@@ -53,7 +53,7 @@ But too much abstraction hides the underlying execution details and makes debugg
 
 :ink[**Plain LLM:** user input -> LLM -> generated answer]{color="gray"}
 
-**Augmented LLM:** A software component with an LLM at its core that can use additional capabilities. Both workflows and agents can use this basic building block.
+**:dfn[Augmented LLM]{#augmented-llm}:** A software component with an LLM at its core that can use additional capabilities. Both workflows and agents can use this basic building block.
 
 **==Augmented LLM = LLM + external augmentations (Retrieval, Tools, Memory, etc.)==**
 
@@ -70,7 +70,7 @@ flowchart LR
 | Tools | What external action do I need to take? | Calling APIs, running code | Let the LLM interact with external systems and take actions |
 | Memory | How is past information stored and reused? | Saving conversations, retrieving past preferences | Store and reuse past information |
 
-:ink[**MCP (Model Context Protocol):** One optional way to implement an augmented LLM. It provides a standardised protocol that lets AI applications exchange tools, resources and other information with external systems.]{color="gray"}
+:ink[**:dfn[MCP (Model Context Protocol)]{#mcp}:** One optional way to implement an augmented LLM. It provides a standardised protocol that lets AI applications exchange tools, resources and other information with external systems.]{color="gray"}
 
 - :ink[**MCP Host:** The AI application that initiates connections (such as a desktop AI assistant or an IDE); it creates and manages one or more MCP clients.]{color="gray"}
 - :ink[**MCP Client:** A protocol client, created by the host, that keeps a one-to-one connection with a single MCP server.]{color="gray"}
@@ -143,7 +143,7 @@ flowchart LR
     - Sectioning is about getting different pieces of work done in parallel.
     - Voting is about improving the coverage or credibility of the result through several independent attempts.
 
-**==※ Orchestrator-Workers: A central LLM acts as the orchestrator, dynamically :concept[breaks down the task]{id="task-decomposition"}, and assigns the subtasks to several workers.==**
+**==※ :dfn[Orchestrator-Workers]{#orchestrator-workers}: A central LLM acts as the orchestrator, dynamically :concept[breaks down the task]{id="task-decomposition"}, and assigns the subtasks to several workers.==**
 
 ```mermaid
 flowchart LR
