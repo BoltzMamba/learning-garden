@@ -3,8 +3,8 @@ title: "Agent Learning Notes 04: Tool Design (Writing Tools for Agents)"
 description: "Notes on Anthropic's \"Writing effective tools for agents — with agents\": how to design, evaluate and iterate on tools for agents."
 translation:
   mode: auto
-  sourceHash: "sha256:a2301fa603f4d1c31e5d9fdc90cefeb32eddd87156e7dd22ccd0eb6c35d41af8"
-  generatedHash: "sha256:341f61b91c68686be4728196ba0d6e8f50ab47d2d9f163070603a1228dab0770"
+  sourceHash: "sha256:a0a22d181d549b4328cf1bb45d60f8b38863835055849888efed55556116c0ae"
+  generatedHash: "sha256:fc727aa8246c3c42a1d1c87537eeeab92de9d6090ade23397fbb2009a7a7c84c"
   rulesVersion: 1
 ---
 
@@ -63,12 +63,12 @@ flowchart LR
     D --> A
 ```
 
-- Build a prototype: start from a minimal working prototype of the tools.
+- **Build a prototype:** Start from a minimal working prototype of the tools.
 
-- Run an evaluation: can the model, on real tasks, choose the right tools, construct the parameters, and reach the goal through a series of calls?
-    - Build realistic tasks
-    - Run the tasks through an agent loop: create a separate run for each evaluation task, and save the final answer, the tool call records, the tool results, error messages, the execution trace and so on
-    - Collect metrics: Task Success Rate (whether the task ultimately succeeds), Tool Call Count (number of tool calls), Token Consumption (number of tokens used), Execution Time (time spent on tools and on the whole task), Tool Error Rate (how tool calls fail)
+- **Run an evaluation:** Can the model, on real tasks, choose the right tools, construct the parameters, and reach the goal through a series of calls?
+    - **Build realistic tasks**
+    - **Run the tasks through an agent loop:** Create a separate run for each evaluation task, and save the final answer, the tool call records, the tool results, error messages, the execution trace and so on
+    - **Collect metrics:** Task Success Rate (whether the task ultimately succeeds), Tool Call Count (number of tool calls), Token Consumption (number of tokens used), Execution Time (time spent on tools and on the whole task), Tool Error Rate (how tool calls fail)
 
 ```mermaid
 flowchart LR
@@ -80,7 +80,7 @@ flowchart LR
     E --> F["Evaluate task performance"]
 ```
 
-- Analyse the results
+- **Analyse the results**
 
 | Observed behaviour | Likely cause |
 | --- | --- |
@@ -90,7 +90,7 @@ flowchart LR
 | Answers wrongly even after correct calls | The tool result is hard to understand |
 | Many tokens spent on tool results | The returned content is too verbose |
 
-- Use agents such as Claude Code to improve the tools
+- **Use agents such as Claude Code to improve the tools**
 
 #### Principles for Effective Tool Design
 
