@@ -1,10 +1,10 @@
 ---
 title: "Weather Trip Helper: Building a Minimal Tool-Calling Agent from Scratch"
-description: "A minimal agent loop built with the DeepSeek API and a simulated weather tool (project log, in progress)."
+description: "A minimal agent loop built from scratch with the DeepSeek API and a simulated weather tool."
 translation:
   mode: auto
-  sourceHash: "sha256:3b37ab897f06744896eb6e4dd8262c702284e60e3b960d5c7d59ffe2b64c21ba"
-  generatedHash: "sha256:01a157e303027229f442cbe8d6d7104abec949e5f5c1f97072645c1bf502801a"
+  sourceHash: "sha256:85f2becb852c12573588f0131cc7d809d954f510733f4001d8824ecb18d897e0"
+  generatedHash: "sha256:effafe0481991c1231bb26d83daffaf38d9bf7b04d591631877cf4a586bdb06f"
   rulesVersion: 1
 ---
 
@@ -195,7 +195,13 @@ With `MAX_STEPS` temporarily set to `1`, the LLM requests the tool in round 1, a
 
 ## Summary and Reflections
 
-> To be written: how has my understanding of the agent loop changed after building it? If I keep going, what would I improve next?
+This experiment was just practice, but honestly, agent development is very similar to backend development; you could even say it is part of backend development.
+
+In the whole project, only one line actually deals with the LLM: `client.chat.completions.create(...)`. Everything else is ordinary backend development.
+
+What makes agent development distinctive is that the LLM decides what to do next, but whether that decision is carried out reliably still depends on the engineering code around it.
+
+So becoming a good agent developer takes a deep understanding of software engineering itself.
 
 ## Code Repository
 

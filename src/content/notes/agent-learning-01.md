@@ -9,8 +9,10 @@ order: 10
 experiments:
   - id: weather-trip-agent
     category: agent-learning
-    status: in-progress
+    status: completed
     public: true
+    links:
+      - { kind: code, url: "https://github.com/BoltzMamba/agent-experiments/tree/main/weather-trip-agent" }
     title: { zh: "天气出游小助手：最小工具调用 Agent", en: "Weather Trip Helper: A Minimal Tool-Calling Agent" }
     description: { zh: "让 LLM 自己调用天气工具查询明天的天气，再推荐去哪里玩，体会“调用工具 → 读取结果 → 继续执行”的基本循环。", en: "Let the LLM call a weather tool to check tomorrow's weather and then recommend where to go, to experience the basic loop of calling a tool, reading the result and continuing." }
     requirements:

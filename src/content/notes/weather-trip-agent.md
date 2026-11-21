@@ -1,9 +1,9 @@
 ---
 title: "天气出游小助手：从零写一个最小工具调用 Agent"
-description: "用 DeepSeek API 和一个模拟天气工具，实现最小的 Agent 循环（项目记录，编写中）。"
+description: "用 DeepSeek API 和一个模拟天气工具，从零实现最小的 Agent 循环。"
 category: "projects"
 tags: ["ai-agent", "large-language-models"]
-published: "2026-11-18"
+published: "2026-11-22"
 projectTier: experiment
 experimentId: weather-trip-agent
 sourceNote: agent-learning-01
@@ -196,7 +196,13 @@ def run_agent(user_input: str) -> str:
 
 ## 总结与反思
 
-> 待补充：这次动手后，对 Agent 循环的理解有什么变化？如果继续做，下一步想改进什么？
+这个实验只是练手，不过说实话 Agent 开发和后端开发非常相似，或者说它本身就是后端开发的一部分。
+
+整个项目里真正和 LLM 打交道的其实只有一行 `client.chat.completions.create(...)`，其余代码做的都是常规后端开发。
+
+Agent 系统开发最大的独特之处在于 LLM 负责"决定下一步做什么"，但这个决定能不能被可靠地执行，最后还是取决于外层工程代码。
+
+所以想做一个好的 Agent 开发工程师，离不开对软件工程本身的深入理解。
 
 ## 代码仓库
 
