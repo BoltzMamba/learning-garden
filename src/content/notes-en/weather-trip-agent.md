@@ -3,8 +3,8 @@ title: "Weather Trip Helper: Building a Minimal Tool-Calling Agent from Scratch"
 description: "A minimal agent loop built from scratch with the DeepSeek API and a simulated weather tool."
 translation:
   mode: auto
-  sourceHash: "sha256:85f2becb852c12573588f0131cc7d809d954f510733f4001d8824ecb18d897e0"
-  generatedHash: "sha256:effafe0481991c1231bb26d83daffaf38d9bf7b04d591631877cf4a586bdb06f"
+  sourceHash: "sha256:93cca02cf820f77ddddb9383e79fb6a4659a0498d12ec8c51cc3508571368a8a"
+  generatedHash: "sha256:47c03e14641a14be2dd2c3096c063584014606bcaf54bba4ea522360c4b33f52"
   rulesVersion: 1
 ---
 
@@ -193,9 +193,84 @@ With `MAX_STEPS` temporarily set to `1`, the LLM requests the tool in round 1, a
 助手： 抱歉，超过最大步数（1）仍未得出结论，已停止。
 ```
 
+## Further Thinking: Three Follow-Up Questions
+
+GPT grilled me on this project. Here are the three most important questions.
+
+### What if a tool call fails?
+
+Different causes of failure call for different handling:
+
+| Type | Example | Handling |
+|---|---|---|
+| Business failure | The city does not exist | Return a structured error to the LLM, which tells the user |
+| Call error | The LLM passes malformed arguments or a tool name that does not exist | Return the error to the LLM so it can fix the arguments and retry |
+| Transient fault | Network timeout, weather API rate limit | The program retries automatically; the LLM is not involved |
+| Persistent fault | The weather service is down | If several retries still fail, return "temporarily unavailable" and let the LLM tell the user |
+
+**Implemented:** the tool returns an `error` instead of raising an exception, and `run_tool` adds a `try/except` safety net. So no tool failure can crash the program; every failure goes back to the LLM as a `role=tool` message. If the LLM keeps retrying, the maximum number of steps stops the loop.
+
+**Possible improvements:** this experiment uses simulated data, which has no transient faults, so retries are not implemented. With a real API, I could:
+- add an error code and a "retryable" field to errors, so the LLM knows whether to retry or give up;
+- add a timeout to tool calls and retry transient faults a limited number of times;
+- log failures to make problems easier to track down.
+
+### What if the LLM calls a tool again in the second round?
+
+Calling a tool again is not necessarily a problem. There are two cases to tell apart.
+
+**Legitimate multi-step calls: the loop already supports them.** For example, if the user asks "Which is better for going out tomorrow, Beijing or Shanghai?", the tool has to be called twice. Or the LLM passes a wrong argument the first time, sees the error, and retries with a fix. As long as `tool_calls` is not empty, the loop runs the tools, returns the results and moves on to the next round, until the LLM gives its final answer. One round can also contain several calls, and the inner `for` handles them one by one.
+
+**Abnormal repeated calls: these must be guarded against.** The LLM may keep making the exact same call with the same arguments and get stuck in an endless loop.
+
+- **Implemented:** the maximum number of steps, `MAX_STEPS = 5`, forces the loop to stop at the limit. The "Exceeding the Maximum Steps" result above confirms this branch.
+- **Possible improvements:**
+  - record each executed "tool name + arguments" pair, and on a repeated call return the earlier result or a note saying it has already been looked up;
+  - count consecutive failures of the same tool, and stop once they pass a threshold.
+
+Every extra round is one more API call, so these measures also keep cost and latency down.
+
+### What if the place exists but no weather can be found?
+
+For example, the user enters "Mars". "Not found" actually comes in three kinds, and each means something different to the user:
+
+| Case | Example | What to tell the user |
+|---|---|---|
+| The place name cannot be recognized | Gibberish, a typo | The place was not found; please check the name |
+| The place exists but is outside the service area | Mars; Singapore in this experiment | This place is not supported, together with the supported range |
+| The service is temporarily unavailable | The weather API times out | The weather cannot be retrieved right now; please try again later |
+
+**Implemented:** every place name that is not in the simulated data returns the same error, together with the list of supported cities. The "Tool Failure" result above shows that for "新加坡" (Singapore), the LLM honestly said the weather could not be found, listed the supported cities, and did not make up any weather.
+
+Two layers prevent made-up answers:
+- **Tool layer:** the data is the only source of truth; when nothing is found, the tool returns an explicit error and never a default value.
+- **Prompt layer:** the system prompt requires the LLM to report honestly when the tool returns an error and not to make up the weather.
+
+**Possible improvement:** the three cases are not yet distinguished. The tool could return a different error type for each, so the LLM can give a more precise explanation:
+
+```python
+{
+    "error_code": "UNSUPPORTED_LOCATION",
+    "error": "「火星」不在天气服务的覆盖范围内",
+    "supported_cities": ["北京", "上海", "广州", "成都"],
+}
+```
+
+With a real API, the usual approach is to first resolve the place name to coordinates (geocoding) and then look up the weather by coordinates. Returning a different error for a failure at each step naturally separates "the place does not exist" from "the weather cannot be found".
+
+### What the Three Questions Have in Common
+
+All three questions are really asking the same thing: where the LLM is unreliable, the engineering code has to cover for it.
+
+| Question | What can go wrong with the LLM | How the engineering covers it |
+|---|---|---|
+| Tool failure | It does not know whether to retry or give up | Classify errors; the program retries transient faults |
+| Repeated calls | It gets stuck in an endless loop | Maximum steps, repeated-call detection |
+| No data found | It makes up an answer | The tool returns an explicit error; the prompt forbids making things up |
+
 ## Summary and Reflections
 
-This experiment was just practice, but honestly, agent development is very similar to backend development; you could even say it is part of backend development.
+Agent development is very similar to backend development; you could even say it is part of backend development.
 
 In the whole project, only one line actually deals with the LLM: `client.chat.completions.create(...)`. Everything else is ordinary backend development.
 
