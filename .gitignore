@@ -31,3 +31,6 @@ pnpm-debug.log*
 
 # Build-time GitHub activity cache (fetched in CI)
 src/data/github-activity.json
+
+# Unfinished practice-note templates (not published, not tracked)
+drafts/

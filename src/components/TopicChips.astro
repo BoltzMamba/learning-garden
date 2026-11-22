@@ -1,16 +1,20 @@
 ---
 /** Topic chips linking to the notes list filtered by that topic. */
 import { localePath } from '../i18n/paths.ts';
-import type { Lang } from '../i18n/ui.ts';
+import { useTranslations, type Lang, type UiKey } from '../i18n/ui.ts';
+import type { TopicFrequency } from '../lib/topics.ts';
 
 interface Props {
   lang: Lang;
-  topics: { id: string; label: string }[];
+  /** `frequency`: a knowledge point's exam frequency, shown after its name. */
+  topics: { id: string; label: string; frequency?: TopicFrequency }[];
   label?: string;
   /** Plain chips instead of links (inside another link's card). */
   plain?: boolean;
 }
 const { lang, topics, label, plain = false } = Astro.props;
+const t = useTranslations(lang);
+const freq = (f?: TopicFrequency) => (f ? ` · ${t(`topic.frequency.${f}` as UiKey)}` : '');
 ---
 
 {
@@ -18,10 +22,10 @@ const { lang, topics, label, plain = false } = Astro.props;
     <span class="flex flex-wrap gap-1.5" aria-label={label}>
       {topics.map((topic) =>
         plain ? (
-          <span class="chip">#{topic.label}</span>
+          <span class="chip">#{topic.label}{freq(topic.frequency)}</span>
         ) : (
           <a class="chip" href={`${localePath(lang, '/notes/')}?tag=${encodeURIComponent(topic.id)}`}>
-            #{topic.label}
+            #{topic.label}{freq(topic.frequency)}
           </a>
         ),
       )}

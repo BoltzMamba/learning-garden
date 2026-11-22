@@ -27,6 +27,7 @@ import { formatScan, scanTranslations, type TranslationScan } from './translatio
 import { checkConcepts } from './concepts-check.ts';
 import type { Concept } from './concepts.ts';
 import { unpublishedProjectIds, validateExperiments, type ExperimentIndex } from './experiments.ts';
+import { validateProblems } from './problems.ts';
 
 /** A note's Chinese source entry: the structure of every logical note. */
 export type SourceNote = CollectionEntry<'notes'>;
@@ -190,6 +191,11 @@ async function load(): Promise<GardenData> {
   );
   for (const w of experiments.warnings) console.warn(`[experiments] ${w}`);
   if (experiments.errors.length) throw new Error(['Invalid learning experiments:', ...experiments.errors].join('\n  '));
+  // Practice problems: only on practice notes, URL on the platform, one note per problem.
+  const problems = validateProblems(
+    allNotes.map((n) => ({ id: n.id, file: n.filePath ?? `src/content/notes/${n.id}.md`, section: n.data.category, problem: n.data.problem })),
+  );
+  if (problems.errors.length) throw new Error(['Invalid practice problems:', ...problems.errors].join('\n  '));
   // A published page must not point at a draft (it has no page yet).
   const draftRefs = [
     ...notes.flatMap((n) =>

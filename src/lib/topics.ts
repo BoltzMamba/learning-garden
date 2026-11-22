@@ -12,12 +12,20 @@ import { SLUG_RE } from './slug.ts';
 
 export const MAX_TOPIC_DEPTH = 3;
 
+/**
+ * Optional exam frequency of a knowledge point (practice topics only). The
+ * basis (CodeTop snapshot + author judgement) is documented in README.md.
+ */
+export const TOPIC_FREQUENCIES = ['high', 'medium', 'low'] as const;
+export type TopicFrequency = (typeof TOPIC_FREQUENCIES)[number];
+
 export interface Topic {
   id: string;
   zh: string;
   en: string;
   parent?: string;
   aliases: string[];
+  frequency?: TopicFrequency;
 }
 
 export interface Vocabulary {
@@ -51,12 +59,16 @@ export function parseVocabulary(raw: unknown, file = 'src/data/topics.json'): Vo
     if (v.aliases !== undefined && !(Array.isArray(v.aliases) && v.aliases.every((a) => typeof a === 'string' && a.trim()))) {
       errors.push(`${at}: "aliases" must be an array of non-empty strings`);
     }
+    if (v.frequency !== undefined && !(TOPIC_FREQUENCIES as readonly unknown[]).includes(v.frequency)) {
+      errors.push(`${at}: "frequency" must be one of ${TOPIC_FREQUENCIES.join(' | ')}`);
+    }
     topics.set(id, {
       id,
       zh: String(v.zh ?? id),
       en: String(v.en ?? id),
       parent: typeof v.parent === 'string' ? v.parent : undefined,
       aliases: Array.isArray(v.aliases) ? (v.aliases as string[]) : [],
+      frequency: (TOPIC_FREQUENCIES as readonly unknown[]).includes(v.frequency) ? (v.frequency as TopicFrequency) : undefined,
     });
   }
 

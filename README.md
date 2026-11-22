@@ -65,6 +65,50 @@ npm run garden -- new --type overview --title "AI Agent" --slug ai-agents-overvi
 npm run garden -- new --title "MCP 基础" --slug mcp-basics --category knowledge --series ai-agents-overview --order 20 --tags mcp --description "..."
 ```
 
+## Practice problems
+
+A note in the `practice` section documents one problem, one problem per note. Its fixed facts go in the Chinese frontmatter under `problem`, and the page shows them as a card under the title (platform and number linking to the problem, difficulty, and a ★ mark for real written-test problems):
+
+```yaml
+category: "practice"
+tags: ["opposite-two-pointers"]   # knowledge points, following 灵茶山艾府's problem lists
+problem:
+  platform: leetcode              # leetcode | nowcoder
+  number: 15                      # required on LeetCode; omit on Nowcoder
+  url: "https://leetcode.cn/problems/3sum/"
+  difficulty: medium              # easy | medium | hard (Nowcoder 较难 → hard)
+  exam: false                     # true = met in a real written test
+  listed: true                    # false = not in 灵茶山艾府's lists; tags are the author's placement
+```
+
+- Note ids: `lc-<number>-<leetcode slug>` (for example `lc-15-3sum`) and `nc-<short english name>`.
+- Knowledge points are topics in `src/data/topics.json`: `algorithms` › problem-list category › sub-category, following 灵茶山艾府's twelve problem lists on leetcode.cn. A problem that is in none of those lists gets `listed: false`, and its page says the placement is the author's.
+- A knowledge point may carry `"frequency": "high" | "medium" | "low"`, shown after the tag on the note page. The tiers below were proposed from CodeTop's interview-frequency ranking (snapshot 2026-11-22, 1,159 problems, `#N` = rank) and confirmed by the owner. CodeTop measures interviews; "judgement" marks a tier adjusted for written tests.
+
+  | Knowledge point (topic id) | Tier | Basis |
+  |---|---|---|
+  | `opposite-two-pointers` | high | 15 #6, 42 #32, 11 #105 |
+  | `fixed-sliding-window` | high | sliding windows overall rank first (3 #1); 239 #41 |
+  | `linked-list` | high | 206 #3, 25 #5, 21 #11, 2 #55 |
+  | `divide-and-conquer` | high | 215 #4 |
+  | `grid-dp` | high | 64 #68, 221 #75, 62 #88 |
+  | `hash-table` | high | 1 #15, 128 #65 |
+  | `in-place-modification` | medium | 41 #57; the rest of the category #98–#660 |
+  | `high-precision-arithmetic` | medium | 415 #28, 43 #53, 67 #368 |
+  | `partition-dp` | medium | 322 #50, 139 #92, 91 #139 |
+  | `monotonic-stack-lexicographic` | medium | 402 #114, 316 #183, 1673 #670 |
+  | `lexicographic-greedy` | medium | 179 #77, 316 #183; 1754 unranked |
+  | `prefix-sum` | medium | 560 #81, others #282–#623 |
+  | `dijkstra` | medium | interviews low (743 #563); judgement: frequent in written tests |
+  | `combinatorics` | medium | interviews low (96 #173); judgement: counting mod 10⁹+7 is frequent in written tests |
+  | `math-greedy` | low | no classic problem ranked |
+  | `basic-greedy` | low | 846 and 1296 unranked, 659 #1012 |
+  | `computational-geometry` | low | all below #300 (149 #353) |
+- Mastery and review history are ordinary review records (`npm run garden -- review`), not frontmatter.
+- None of these fields is part of the translation source hash, so editing them never makes the English edition stale.
+- The build fails if a non-practice note has `problem`, a LeetCode problem has no number, the URL is not on the platform's host, or two notes describe the same problem.
+- Unfinished templates live in `drafts/practice/`, outside the content collection, so they are not published. Move a finished note into `src/content/notes/` and give it an English edition before publishing.
+
 ## Learning experiments
 
 A knowledge note can end with a few small hands-on experiments that test what it explains (roughly 30 minutes to 2 hours each). They are optional: add one only when building it would sharpen your understanding. The workflow with Claude Code or Codex (propose → you confirm → register → build → complete) is in `AGENTS.md` → "Learning Experiments".

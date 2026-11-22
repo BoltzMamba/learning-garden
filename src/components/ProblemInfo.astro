@@ -1,0 +1,35 @@
+---
+/**
+ * The fixed facts of a practice problem, under the note title: platform and
+ * number (linking to the problem), difficulty, and a mark for real exam
+ * problems. Difficulty is spelled out, never shown by colour alone.
+ */
+import { useTranslations, type Lang, type UiKey } from '../i18n/ui.ts';
+import type { Problem } from '../lib/problems.ts';
+
+interface Props {
+  lang: Lang;
+  problem: Problem;
+}
+const { lang, problem } = Astro.props;
+const t = useTranslations(lang);
+const platform = t(`problem.platform.${problem.platform}` as UiKey);
+const name = problem.number !== undefined ? `${platform} ${problem.number}` : platform;
+---
+
+<p
+  class="mt-4 flex flex-wrap items-center gap-1.5 text-sm"
+  aria-label={t('problem.label')}
+  data-problem={problem.platform}
+  data-difficulty={problem.difficulty}
+>
+  <a class="chip text-fg hover:text-accent" href={problem.url} rel="noopener" target="_blank">
+    {name} · {t('problem.open')} ↗
+  </a>
+  <span class="chip">
+    <span class="sr-only">{t('problem.difficulty')}:</span>
+    {t(`problem.difficulty.${problem.difficulty}` as UiKey)}
+  </span>
+  {problem.exam && <span class="chip text-accent" data-exam>★ {t('problem.exam')}</span>}
+  {!problem.listed && <span class="chip" title={t('problem.unlistedHint')} data-unlisted>{t('problem.unlisted')}</span>}
+</p>

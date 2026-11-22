@@ -7,6 +7,7 @@ import { LEGACY_CATEGORIES, SECTIONS, toSection } from './lib/sections.ts';
 import { CONTENT_TYPES } from './lib/content-model.ts';
 import { TRANSLATION_MODES } from './lib/translation.ts';
 import { experimentSchema, PROJECT_TIERS } from './lib/experiments.ts';
+import { problemSchema } from './lib/problems.ts';
 
 /** `YYYY-MM-DD`; tolerates YAML auto-dates without timezone shifts. */
 const calendarDate = z.union([z.string(), z.date()]).transform((value, ctx) => {
@@ -54,6 +55,8 @@ const notes = defineCollection({
      * ids, links and project articles are cross-checked there.
      */
     experiments: z.array(experimentSchema).default([]),
+    /** Practice only: the problem this note documents (src/lib/problems.ts). */
+    problem: problemSchema.optional(),
     /** Projects only: `featured` (default) or `experiment`. */
     projectTier: z.enum(PROJECT_TIERS).optional(),
     /** Experiment projects only: the experiment this article documents … */
