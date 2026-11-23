@@ -115,3 +115,65 @@ class Solution:
 快排的核心思路就是让排序后左边的数小于pivot，右边的大于pivot。
 
 然后分治就是将大的数组变成小的数组，从小到大用相同的方法递归的解决这个问题。
+
+## 相关题目
+
+### [力扣 215. 数组中的第K个最大元素](https://leetcode.cn/problems/kth-largest-element-in-an-array/)（中等，笔试真题）
+
+<details>
+<summary>思路和代码（点击展开）</summary>
+
+和本题用同一个划分：第 k 大的数就是升序排好后下标为 n−k 的数。划分一次后，基准落在下标 m：
+
+- m 等于 n−k，基准就是答案；
+- m 小于 n−k，答案在右边，只处理右边；
+- m 大于 n−k，答案在左边，只处理左边。
+
+每次只进入一边，不用两边都递归，这就是快速选择。期望时间 O(n)（n + n/2 + n/4 + … ≈ 2n），最坏 O(n²)；额外空间是递归栈，每次只递归一边，期望深度 O(log n)，最坏 O(n)。随机选基准和比较时不加等号这两点同样不能少，这题的测试数据里也有大量重复数字。
+
+```python
+import random
+
+class Solution:
+    def findKthLargest(self, nums: List[int], k: int) -> int:
+        n = len(nums)
+        def quickselect(left, right):
+            l = left
+            r = right
+            if l >= r:
+                return
+            
+            p = random.randint(left, right)
+            nums[p], nums[l] = nums[l], nums[p]
+
+            base = nums[l]
+            blank = l
+
+            while l < r:
+                if blank == l:
+                    if nums[r] > base:
+                        r -= 1
+                    else:
+                        nums[l] = nums[r]
+                        blank = r
+                        l += 1
+                else:
+                    if nums[l] < base:
+                        l += 1
+                    else:
+                        nums[r] = nums[l]
+                        blank = l
+                        r -= 1
+            nums[l] = base
+            if l < n - k:
+                quickselect(l+1,right)
+            elif l > n - k:
+                quickselect(left,l-1)
+            else:
+                return
+        quickselect(0, n - 1)
+
+        return nums[n - k]
+```
+
+</details>

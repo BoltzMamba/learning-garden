@@ -321,6 +321,27 @@ button.chip:hover {
   background: var(--surface-2);
   font-weight: 600;
 }
+/* Folded content in a note body (<details>), e.g. a related problem's solution. */
+.prose details {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5em 1em;
+}
+.prose details > * + * {
+  margin-top: 1.1em;
+}
+.prose details[open] > summary {
+  padding-bottom: 0.5em;
+  border-bottom: 1px dashed var(--border);
+}
+.prose summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.prose summary:hover {
+  color: var(--accent);
+}
 .prose .katex-display {
   overflow-x: auto;
   overflow-y: hidden;

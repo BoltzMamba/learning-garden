@@ -3,8 +3,8 @@ title: "LeetCode 912. Sort an Array"
 description: "Quicksort with a random pivot (hole-filling partition): one partition pass splits the array into a ≤-pivot part and a ≥-pivot part, then each part is sorted recursively; expected O(n log n)."
 translation:
   mode: auto
-  sourceHash: "sha256:1d63e5e430bb473165e3e5a7cd47720691c6859094879d2a4872fc4d1d45bb73"
-  generatedHash: "sha256:a52e6d714b125f73b5a41ef38f400942f5744c4caebc47a764c0cf20bdccdaab"
+  sourceHash: "sha256:ac44b32b26551e193beea384edbb62fe86ae1445636a7b2f9fe22cf14e3550cc"
+  generatedHash: "sha256:ae6a4d0561fa6be27814022a004a37ca70c945e8edf4873cdb0515af87733ef0"
   rulesVersion: 1
 ---
 
@@ -110,3 +110,65 @@ This knowledge point also came up in a Shopee written test.
 The core idea of quicksort is that after partitioning, the numbers on the left are smaller than the pivot and those on the right are larger.
 
 Divide and conquer then turns a large array into smaller arrays and solves the problem recursively with the same method, from small to large.
+
+## Related problems
+
+### [LeetCode 215. Kth Largest Element in an Array](https://leetcode.cn/problems/kth-largest-element-in-an-array/) (medium, real written-test problem)
+
+<details>
+<summary>Approach and code (click to expand)</summary>
+
+It uses the same partition as this problem: the kth largest number is the number at index n−k once the array is sorted in ascending order. After one partition the pivot lands at index m:
+
+- if m equals n−k, the pivot is the answer;
+- if m is less than n−k, the answer is on the right, so only the right part is processed;
+- if m is greater than n−k, the answer is on the left, so only the left part is processed.
+
+Each step goes into only one side instead of recursing into both; this is quickselect. Expected time is O(n) (n + n/2 + n/4 + … ≈ 2n), worst case O(n²); the extra space is the recursion stack, and since each step recurses into only one side its expected depth is O(log n), worst case O(n). The random pivot and the comparisons without the equals sign are just as necessary here, since this problem's tests also contain a large number of duplicate values.
+
+```python
+import random
+
+class Solution:
+    def findKthLargest(self, nums: List[int], k: int) -> int:
+        n = len(nums)
+        def quickselect(left, right):
+            l = left
+            r = right
+            if l >= r:
+                return
+
+            p = random.randint(left, right)
+            nums[p], nums[l] = nums[l], nums[p]
+
+            base = nums[l]
+            blank = l
+
+            while l < r:
+                if blank == l:
+                    if nums[r] > base:
+                        r -= 1
+                    else:
+                        nums[l] = nums[r]
+                        blank = r
+                        l += 1
+                else:
+                    if nums[l] < base:
+                        l += 1
+                    else:
+                        nums[r] = nums[l]
+                        blank = l
+                        r -= 1
+            nums[l] = base
+            if l < n - k:
+                quickselect(l+1,right)
+            elif l > n - k:
+                quickselect(left,l-1)
+            else:
+                return
+        quickselect(0, n - 1)
+
+        return nums[n - k]
+```
+
+</details>
