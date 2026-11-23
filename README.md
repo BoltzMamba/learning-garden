@@ -90,7 +90,7 @@ problem:
   | `opposite-two-pointers` | high | 15 #6, 42 #32, 11 #105 |
   | `fixed-sliding-window` | high | sliding windows overall rank first (3 #1); 239 #41 |
   | `linked-list` | high | 206 #3, 25 #5, 21 #11, 2 #55 |
-  | `divide-and-conquer` | high | 215 #4 |
+  | `divide-and-conquer` | high | 215 #4; 912 #290 |
   | `grid-dp` | high | 64 #68, 221 #75, 62 #88 |
   | `hash-table` | high | 1 #15, 128 #65 |
   | `in-place-modification` | medium | 41 #57; the rest of the category #98–#660 |
