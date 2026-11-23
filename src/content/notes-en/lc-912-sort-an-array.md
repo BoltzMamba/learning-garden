@@ -3,8 +3,8 @@ title: "LeetCode 912. Sort an Array"
 description: "Quicksort with a random pivot (hole-filling partition): one partition pass splits the array into a ≤-pivot part and a ≥-pivot part, then each part is sorted recursively; expected O(n log n)."
 translation:
   mode: auto
-  sourceHash: "sha256:ac44b32b26551e193beea384edbb62fe86ae1445636a7b2f9fe22cf14e3550cc"
-  generatedHash: "sha256:ae6a4d0561fa6be27814022a004a37ca70c945e8edf4873cdb0515af87733ef0"
+  sourceHash: "sha256:0e72fa952da036f72dd5c6377a30b3674f9975995d7ee849762cb63a6f611863"
+  generatedHash: "sha256:9e77e1ac051f695dbeb63b29ec30107231b8588b121c49bd98695cf698e6634b"
   rulesVersion: 1
 ---
 
@@ -82,6 +82,34 @@ class Solution:
 
 - Time: expected O(n log n), worst case O(n²). With a random pivot, the worst case is extremely unlikely.
 - Space: the sort is in place; the only extra space is the recursion stack, expected O(log n), worst case O(n).
+
+### Why the average is O(n log n) and the worst case is O(n²)
+
+Draw the recursion as a tree: the root is the whole array, and each partition produces a left and a right subarray as its children.
+
+**Each level does O(n) work in total.** In one partition, every number in the range is compared with the pivot once and moved at most once, so the cost is proportional to the range length. The subarrays on one level do not overlap and their lengths add up to at most n, so however the splits fall, each level costs O(n) in total. Therefore:
+
+$$
+\text{total time} = O(n) \text{ per level} \times \text{number of levels}
+$$
+
+The time complexity depends entirely on how deep the recursion tree is.
+
+**Best case: every split is exactly in half.** Level 0 has 1 array of length n, level 1 has 2 of length n/2, level 2 has 4 of length n/4, and so on; at level k the subarrays have length $n/2^k$. Recursion stops when the length reaches 1, and $n/2^k = 1$ gives $k = \log_2 n$. That is log n levels of n each, O(n log n) in total.
+
+**The splits do not have to be exactly in half.** Even if every split is as lopsided as 1:9, the larger side still shrinks to 9/10 of its length at each level, so reaching length 1 takes $\log_{10/9} n$ levels. Changing the base gives $\log_{10/9} n = \log_2 n / \log_2(10/9) \approx 6.6 \log_2 n$, which is still O(log n) levels, just with a larger constant. So as long as the split ratio does not keep getting more lopsided, the depth is O(log n) and the total time is O(n log n).
+
+**Why a random pivot guarantees this on average.** Divide the range into four quarters by rank. The probability that the pivot's rank falls in the middle two quarters (between the 25th and 75th percentile) is 1/2. Call such a split a "good split": neither side is larger than 3/4 of the original.
+
+Follow any single number x. Each good split that x goes through shrinks the subarray containing it to at most 3/4, so after $\log_{4/3} n$ good splits only x is left. Each partition is a good split with probability 1/2, which is like flipping a coin until it lands heads: on average it takes 2 flips. So x is drawn into only about $2\log_{4/3} n$ partitions on average, that is O(log n). Each number is processed O(log n) times on average, so the n numbers together give expected O(n log n). A more precise calculation gives an expected number of comparisons of about $2n\ln n \approx 1.39\, n\log_2 n$.
+
+**Worst case: every split is 0 and n−1.** If the pivot is always the smallest (or largest) number in its range, one side of the partition is empty and the other loses only the pivot. The recursion tree degenerates into a chain of n levels with lengths n, n−1, n−2, …, 1:
+
+$$
+n + (n-1) + \cdots + 1 = \frac{n(n+1)}{2} = O(n^2)
+$$
+
+With the leftmost number as a fixed pivot, a sorted array hits this case at every step; with the equals sign in the comparisons, an array of all-equal numbers does too (see the pitfalls below). With a random pivot, hitting the minimum or maximum many times in a row is extremely unlikely, so the worst case almost never happens in practice.
 
 ## Pitfalls
 
