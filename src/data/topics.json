@@ -40,6 +40,10 @@
   "divide-and-conquer": { "zh": "分治与快速选择", "en": "Divide and Conquer and Quickselect", "parent": "linked-list-tree-backtracking", "frequency": "high", "aliases": ["quickselect", "分治", "快速选择"] },
 
   "software-engineering": { "zh": "软件工程", "en": "Software Engineering", "aliases": ["se"] },
+  "backend": { "zh": "后端", "en": "Backend Engineering", "parent": "software-engineering", "aliases": ["backend-engineering", "后端"] },
+  "high-concurrency": { "zh": "高并发", "en": "High Concurrency", "parent": "backend", "aliases": ["concurrency", "concurrency-control", "高并发"] },
+  "distributed-systems": { "zh": "分布式系统", "en": "Distributed Systems", "parent": "backend", "aliases": ["distributed", "分布式"] },
+  "middleware": { "zh": "中间件", "en": "Middleware", "parent": "backend", "aliases": ["message-queue", "mq", "中间件"] },
 
   "learning-garden": { "zh": "学习花园", "en": "Learning Garden", "aliases": ["garden"] },
   "workflow": { "zh": "工作流", "en": "Workflow", "aliases": ["workflows"] }
